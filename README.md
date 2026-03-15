@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# 🤖 GO-TONGX — AI 项目助手
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> 基于 Tauri + React + Rust 的智能项目管理桌面应用
 
-Currently, two official plugins are available:
+## ✨ 功能特性
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 📁 **项目管理** — 创建、搜索、筛选项目
+- 🧠 **AI 技能中心** — MCP 插件生态、技能市场、Agent 管理
+- 💬 **AI 对话** — 支持在线/本地大模型（硅基流动、DeepSeek、Gemini、LM Studio）
+- 🧾 **差旅管理** — 发票 OCR 识别、行程报销
+- 📝 **全局模板** — 可复用的项目模板系统
+- 🎨 **三套主题** — 浅色 / 暗色 / 液态玻璃（iOS 26 风格）
 
-## React Compiler
+## 🛠️ 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| 层级 | 技术 |
+|------|------|
+| 前端 | React 18 + TypeScript + Vite |
+| 后端 | Rust + Tauri 2.0 |
+| 样式 | CSS Variables + Tailwind |
+| AI  | OpenAI 兼容 API + MCP 协议 |
+| 存储 | SQLite (rusqlite) |
 
-## Expanding the ESLint configuration
+## 🚀 新电脑部署
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 1. 安装依赖工具
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- [Git](https://git-scm.com/downloads)
+- [Node.js v18+](https://nodejs.org)
+- [Rust](https://rustup.rs)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 2. 克隆并运行
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+cd K:\
+git clone https://github.com/147258369zhh-lgtm/-.git
+cd -
+npm install
+npm run tauri dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+> 首次编译 Rust 约需 5-15 分钟，之后秒启动
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 📦 日常同步
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+# 推送改动
+git add -A
+git commit -m "更新说明"
+git push
+
+# 另一台电脑拉取
+git pull
 ```
