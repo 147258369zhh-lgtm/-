@@ -1,0 +1,131 @@
+    Checking app v0.1.0 (K:\GPT\GO TONGX - 副本\src-tauri)
+error[E0583]: file not found for module `system`
+ --> src\lib.rs:5:1
+  |
+5 | mod system;
+  | ^^^^^^^^^^^
+  |
+  = help: to create the module `system`, create file "src\system.rs" or "src\system\mod.rs"
+  = note: if there is a `mod system` elsewhere in the crate already, import it with `use crate::...` instead
+
+error[E0583]: file not found for module `chat`
+ --> src\lib.rs:6:1
+  |
+6 | mod chat;
+  | ^^^^^^^^^
+  |
+  = help: to create the module `chat`, create file "src\chat.rs" or "src\chat\mod.rs"
+  = note: if there is a `mod chat` elsewhere in the crate already, import it with `use crate::...` instead
+
+error[E0432]: unresolved import `eyre`
+ --> src\utils\office_converter.rs:3:5
+  |
+3 | use eyre::{Result, Context};
+  |     ^^^^ use of unresolved module or unlinked crate `eyre`
+  |
+  = help: if you wanted to use a crate named `eyre`, use `cargo add eyre` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `tracing`
+ --> src\utils\office_converter.rs:4:5
+  |
+4 | use tracing::{info, warn, error};
+  |     ^^^^^^^ use of unresolved module or unlinked crate `tracing`
+  |
+  = help: if you wanted to use a crate named `tracing`, use `cargo add tracing` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: could not find `__cmd__stop_generation` in `chat`
+  --> src\lib.rs:95:19
+   |
+95 |             chat::stop_generation,
+   |                   ^^^^^^^^^^^^^^^ could not find `__cmd__stop_generation` in `chat`
+
+error[E0433]: failed to resolve: could not find `__cmd__get_system_info` in `system`
+  --> src\lib.rs:96:21
+   |
+96 |             system::get_system_info,
+   |                     ^^^^^^^^^^^^^^^ could not find `__cmd__get_system_info` in `system`
+
+error[E0433]: failed to resolve: could not find `__cmd__mcp_call_tool` in `commands`
+  --> src\lib.rs:97:28
+   |
+97 |             mcp::commands::mcp_call_tool,
+   |                            ^^^^^^^^^^^^^ could not find `__cmd__mcp_call_tool` in `commands`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `eyre`
+   --> src\utils\office_converter.rs:102:20
+    |
+102 |         return Err(eyre::eyre!("PowerShell script succeeded but output PDF was not found at {}", output_path_str));
+    |                    ^^^^ use of unresolved module or unlinked crate `eyre`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `eyre`
+  --> src\utils\office_converter.rs:98:20
+   |
+98 |         return Err(eyre::eyre!("PDF Conversion failed. Please ensure MS Office is installed. Error: {}", stderr));
+   |                    ^^^^ use of unresolved module or unlinked crate `eyre`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `eyre`
+  --> src\utils\office_converter.rs:84:25
+   |
+84 |         _ => return Err(eyre::eyre!("Unsupported file extension: {}", ext)),
+   |                         ^^^^ use of unresolved module or unlinked crate `eyre`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `eyre`
+  --> src\utils\office_converter.rs:15:62
+   |
+15 |     let output_path_str = output_path.to_str().ok_or_else(|| eyre::eyre!("Invalid output path"))?;
+   |                                                              ^^^^ use of unresolved module or unlinked crate `eyre`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `eyre`
+ --> src\utils\office_converter.rs:9:60
+  |
+9 |     let input_path_str = input_path.to_str().ok_or_else(|| eyre::eyre!("Invalid input path"))?;
+  |                                                            ^^^^ use of unresolved module or unlinked crate `eyre`
+
+warning: unused import: `AppHandle`
+  --> src\lib.rs:11:13
+   |
+11 | use tauri::{AppHandle, Manager};
+   |             ^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0282]: type annotations needed
+   --> src\lib.rs:119:28
+    |
+119 |         Ok(pdf_path) => Ok(pdf_path.to_string_lossy().into_owned()),
+    |                            ^^^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> src\lib.rs:120:23
+    |
+120 |         Err(e) => Err(e.to_string()),
+    |                       ^ cannot infer type
+
+error[E0599]: no method named `wrap_err` found for enum `Result<T, E>` in the current scope
+    --> src\utils\office_converter.rs:93:10
+     |
+  90 |       let output = Command::new("powershell")
+     |  __________________-
+  91 | |         .args(&["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+  92 | |         .output()
+  93 | |         .wrap_err("Failed to execute PowerShell for PDF conversion")?;
+     | |_________-^^^^^^^^
+     |
+help: there is a method `unwrap_err` with a similar name, but with different arguments
+    --> C:\Users\29136\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib/rustlib/src/rust\library\core\src\result.rs:1324:5
+     |
+1324 | /     pub fn unwrap_err(self) -> E
+1325 | |     where
+1326 | |         T: fmt::Debug,
+     | |______________________^
+
+warning: unused import: `Manager`
+ --> src\mcp\commands.rs:1:20
+  |
+1 | use tauri::{State, Manager};
+  |                    ^^^^^^^
+
+Some errors have detailed explanations: E0282, E0432, E0433, E0583, E0599.
+For more information about an error, try `rustc --explain E0282`.
+warning: `app` (lib) generated 2 warnings
+error: could not compile `app` (lib) due to 15 previous errors; 2 warnings emitted

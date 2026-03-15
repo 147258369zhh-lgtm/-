@@ -1,0 +1,540 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════
+   THEME DESIGN TOKENS — Light & Dark via CSS Variables
+   All colors in the app should reference these variables.
+═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Backgrounds */
+  --bg-root:        #f4f5f7;
+  --bg-surface:     #ffffff;
+  --bg-raised:      #f8f9fb;
+  --bg-subtle:      #eef0f4;
+  --bg-muted:       #e5e7eb;
+  --bg-overlay:     rgba(255, 255, 255, 0.85);
+
+  /* Borders */
+  --border:         #e4e7ec;
+  --border-subtle:  #f0f2f6;
+  --border-strong:  #c8cdd8;
+
+  /* Text */
+  --text-primary:   #111827;
+  --text-secondary: #374151;
+  --text-muted:     #6b7280;
+  --text-faint:     #9ca3af;
+  --text-inverse:   #ffffff;
+
+  /* Brand - Blue */
+  --brand:          #2563eb;
+  --brand-hover:    #1d4ed8;
+  --brand-subtle:   #dbeafe;
+  --brand-text:     #1e40af;
+
+  /* Status */
+  --success:        #16a34a;
+  --success-subtle: #dcfce7;
+  --danger:         #dc2626;
+  --danger-subtle:  #fee2e2;
+  --warning:        #d97706;
+  --warning-subtle: #fef3c7;
+  --purple:         #7c3aed;
+  --purple-subtle:  #ede9fe;
+
+  /* Sidebar */
+  --sidebar-bg:      #f8fafb;
+  --sidebar-border:  #e4e7ec;
+
+  /* Titlebar */
+  --titlebar-bg:     #ffffff;
+  --titlebar-border: #e4e7ec;
+
+  /* Modal backdrop */
+  --modal-bg: rgba(17, 24, 39, 0.40);
+
+  /* Popover */
+  --popover-bg: #fefefe;
+  --popover-border: #e2e8f0;
+  --popover-shadow: 0 16px 36px rgba(15,23,42,0.18);
+
+  /* Input */
+  --input-bg:      #f9fafb;
+  --input-border:  #d1d5db;
+  --input-focus:   #2563eb;
+
+  /* Table */
+  --table-header:  #f3f4f6;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow:    0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+
+  /* Transitions */
+  --transition: all 0.2s ease;
+}
+
+html.dark {
+  /* Backgrounds */
+  --bg-root:        #020617;
+  --bg-surface:     #0f172a;
+  --bg-raised:      #1e293b;
+  --bg-subtle:      #1a2436;
+  --bg-muted:       #334155;
+  --bg-overlay:     rgba(15, 23, 42, 0.85);
+
+  /* Borders */
+  --border:         #1e293b;
+  --border-subtle:  #172032;
+  --border-strong:  #334155;
+
+  /* Text */
+  --text-primary:   #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted:     #64748b;
+  --text-faint:     #475569;
+  --text-inverse:   #0f172a;
+
+  /* Brand */
+  --brand:          #3b82f6;
+  --brand-hover:    #2563eb;
+  --brand-subtle:   rgba(59,130,246,0.15);
+  --brand-text:     #93c5fd;
+
+  /* Status */
+  --success:        #22c55e;
+  --success-subtle: rgba(34,197,94,0.12);
+  --danger:         #f87171;
+  --danger-subtle:  rgba(248,113,113,0.12);
+  --warning:        #fbbf24;
+  --warning-subtle: rgba(251,191,36,0.12);
+  --purple:         #a78bfa;
+  --purple-subtle:  rgba(167,139,250,0.12);
+
+  /* Sidebar */
+  --sidebar-bg:      #0a111f;
+  --sidebar-border:  #1e293b;
+
+  /* Titlebar */
+  --titlebar-bg:     #040d1a;
+  --titlebar-border: #1e293b;
+
+  /* Modal backdrop */
+  --modal-bg: rgba(0,0,0,0.75);
+
+  /* Popover */
+  --popover-bg: #0f172a;
+  --popover-border: #1f2937;
+  --popover-shadow: 0 16px 36px rgba(0,0,0,0.55);
+
+  /* Input */
+  --input-bg:      #0f172a;
+  --input-border:  #334155;
+  --input-focus:   #3b82f6;
+
+  /* Table */
+  --table-header:  rgba(15,23,42,0.8);
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow:    0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIQUID GLASS THEME — iOS 26 inspired
+   True translucent surfaces with refraction, lensing & shine
+═══════════════════════════════════════════════════════════ */
+html.glass {
+  /* Backgrounds — HIGHLY transparent, content bleeds through */
+  --bg-root:        transparent;
+  --bg-surface:     rgba(255, 255, 255, 0.12);
+  --bg-raised:      rgba(255, 255, 255, 0.18);
+  --bg-subtle:      rgba(255, 255, 255, 0.08);
+  --bg-muted:       rgba(255, 255, 255, 0.14);
+  --bg-overlay:     rgba(255, 255, 255, 0.22);
+
+  /* Borders — glass edge highlights */
+  --border:         rgba(255, 255, 255, 0.30);
+  --border-subtle:  rgba(255, 255, 255, 0.15);
+  --border-strong:  rgba(255, 255, 255, 0.50);
+
+  /* Text — slightly translucent for glass feel */
+  --text-primary:   rgba(10, 10, 30, 0.88);
+  --text-secondary: rgba(30, 30, 60, 0.72);
+  --text-muted:     rgba(60, 60, 100, 0.55);
+  --text-faint:     rgba(80, 80, 120, 0.40);
+  --text-inverse:   #ffffff;
+
+  /* Brand — vivid indigo-violet for glass */
+  --brand:          #6366f1;
+  --brand-hover:    #4f46e5;
+  --brand-subtle:   rgba(99,102,241,0.12);
+  --brand-text:     #4338ca;
+
+  /* Status */
+  --success:        #10b981;
+  --success-subtle: rgba(16,185,129,0.10);
+  --danger:         #ef4444;
+  --danger-subtle:  rgba(239,68,68,0.10);
+  --warning:        #f59e0b;
+  --warning-subtle: rgba(245,158,11,0.10);
+  --purple:         #8b5cf6;
+  --purple-subtle:  rgba(139,92,246,0.10);
+
+  /* Sidebar — nearly clear glass */
+  --sidebar-bg:      rgba(255, 255, 255, 0.10);
+  --sidebar-border:  rgba(255, 255, 255, 0.25);
+
+  /* Titlebar — clear glass band */
+  --titlebar-bg:     rgba(255, 255, 255, 0.12);
+  --titlebar-border: rgba(255, 255, 255, 0.20);
+
+  /* Modal backdrop */
+  --modal-bg: rgba(20, 20, 50, 0.30);
+
+  /* Popover */
+  --popover-bg: rgba(255, 255, 255, 0.25);
+  --popover-border: rgba(255, 255, 255, 0.35);
+  --popover-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.2) inset;
+
+  /* Input — glass input fields */
+  --input-bg:      rgba(255, 255, 255, 0.15);
+  --input-border:  rgba(255, 255, 255, 0.30);
+  --input-focus:   #6366f1;
+
+  /* Table */
+  --table-header:  rgba(255, 255, 255, 0.10);
+
+  /* Shadow — floating glass depth */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow:    0 8px 32px rgba(0,0,0,0.08);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.12);
+
+  /* ── Glass-specific tokens ── */
+  --glass-blur:      blur(24px) saturate(200%);
+  --glass-blur-heavy: blur(40px) saturate(220%);
+  --glass-border:    1px solid rgba(255,255,255,0.30);
+  --glass-shine:     inset 0 1px 0 rgba(255,255,255,0.5);
+  --glass-highlight: linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 50%);
+  --glass-depth:     0 8px 32px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(255,255,255,0.30) inset;
+}
+
+/* ─────────────────────────────────────────
+   Base Resets
+───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-root);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-root);
+}
+
+/* ─────────────────────────────────────────
+   Semantic Utility Classes
+───────────────────────────────────────── */
+.theme-bg-root    { background-color: var(--bg-root); }
+.theme-bg-surface { background-color: var(--bg-surface); }
+.theme-bg-raised  { background-color: var(--bg-raised); }
+.theme-bg-subtle  { background-color: var(--bg-subtle); }
+.theme-bg-muted   { background-color: var(--bg-muted); }
+
+.theme-border         { border-color: var(--border); }
+.theme-border-subtle  { border-color: var(--border-subtle); }
+
+.theme-text-primary   { color: var(--text-primary); }
+.theme-text-secondary { color: var(--text-secondary); }
+.theme-text-muted     { color: var(--text-muted); }
+.theme-text-faint     { color: var(--text-faint); }
+
+.theme-sidebar    { background-color: var(--sidebar-bg); border-color: var(--sidebar-border); }
+.theme-titlebar   { background-color: var(--titlebar-bg); border-color: var(--titlebar-border); }
+
+.theme-input {
+  background-color: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--text-primary);
+}
+.theme-input:focus {
+  border-color: var(--input-focus);
+  outline: none;
+}
+
+.theme-surface-raised {
+  background-color: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+/* ─────────────────────────────────────────
+   Custom scrollbar
+───────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* ─────────────────────────────────────────
+   Animate-in utilities
+───────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slide-in-from-bottom-4 {
+  from { transform: translateY(1rem); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes slide-in-from-right {
+  from { transform: translateX(1rem); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes zoom-in-95 {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.animate-in { animation-duration: 0.3s; animation-fill-mode: both; }
+.fade-in { animation-name: fade-in; }
+.slide-in-from-bottom-4 { animation-name: slide-in-from-bottom-4; }
+.slide-in-from-right { animation-name: slide-in-from-right; }
+.slide-in-from-bottom-2 { animation-name: slide-in-from-bottom-4; }
+.zoom-in-95 { animation-name: zoom-in-95; }
+.duration-200 { animation-duration: 0.2s; }
+.duration-300 { animation-duration: 0.3s; }
+.duration-500 { animation-duration: 0.5s; }
+
+/* ─────────────────────────────────────────
+   Liquid Glass theme — iOS 26 glass effects
+   Applied when html has class 'glass'
+───────────────────────────────────────── */
+
+/* Animated gradient wallpaper background */
+@keyframes glass-bg-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+html.glass body {
+  background: linear-gradient(
+    -45deg,
+    #e8edf5, #dde5f2, #ede4f2, #e0eaf3,
+    #eae3f0, #dfe8f2, #e5e0f0, #e4eee8
+  );
+  background-size: 400% 400%;
+  animation: glass-bg-shift 25s ease infinite;
+}
+
+html.glass #root {
+  background: transparent !important;
+}
+
+html.glass #root > div {
+  background: transparent !important;
+}
+
+/* ── Titlebar glass panel ── */
+html.glass [data-tauri-drag-region] {
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  background: rgba(255,255,255,0.12) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.25) !important;
+  box-shadow:
+    var(--glass-shine),
+    0 1px 0 rgba(255,255,255,0.15),
+    0 4px 16px rgba(0,0,0,0.04);
+}
+
+/* ── Sidebar glass panel ── */
+html.glass #root > div > div:nth-child(2) > div:first-child {
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  background: rgba(255,255,255,0.10) !important;
+  border-right: 1px solid rgba(255,255,255,0.20) !important;
+  box-shadow:
+    var(--glass-shine),
+    1px 0 0 rgba(255,255,255,0.10),
+    4px 0 24px rgba(0,0,0,0.03);
+  position: relative;
+}
+
+/* Sidebar specular highlight */
+html.glass #root > div > div:nth-child(2) > div:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 60%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+/* ── Main content glass panel ── */
+html.glass #root > div > div:nth-child(2) > main {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  background: rgba(255,255,255,0.08) !important;
+  position: relative;
+}
+
+/* ── Section cards get glass treatment ── */
+html.glass [style*="borderRadius: 24"] {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    var(--glass-depth),
+    var(--glass-shine);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Specular highlight on section cards */
+html.glass [style*="borderRadius: 24"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+/* ── Buttons: iOS 26 clear liquid glass pills ── */
+html.glass button {
+  backdrop-filter: blur(6px) saturate(140%);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+  background: rgba(255,255,255,0.06) !important;
+  border: none !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.35),
+    inset 0 0.5px 0 rgba(255,255,255,0.45),
+    0 1px 3px rgba(0,0,0,0.03);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ultra-subtle specular shine */
+html.glass button::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.18) 0%,
+    rgba(255,255,255,0.04) 60%,
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+html.glass button:hover {
+  background: rgba(255,255,255,0.14) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.50),
+    inset 0 0.5px 0 rgba(255,255,255,0.55),
+    0 4px 16px rgba(0,0,0,0.06),
+    0 0 20px rgba(255,255,255,0.08);
+  transform: translateY(-0.5px);
+}
+
+html.glass button:active {
+  transform: translateY(0.5px) scale(0.985);
+  background: rgba(255,255,255,0.10) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.30),
+    inset 0 1px 2px rgba(0,0,0,0.04);
+  transition-duration: 0.08s;
+}
+
+/* Brand/primary — tinted clear glass */
+html.glass button[style*="var(--brand)"],
+html.glass button[style*="#2563eb"] {
+  background: rgba(99,102,241,0.22) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(99,102,241,0.30),
+    inset 0 0.5px 0 rgba(255,255,255,0.30),
+    0 2px 12px rgba(99,102,241,0.12);
+}
+
+html.glass button[style*="var(--brand)"]:hover,
+html.glass button[style*="#2563eb"]:hover {
+  background: rgba(99,102,241,0.35) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(99,102,241,0.40),
+    inset 0 0.5px 0 rgba(255,255,255,0.40),
+    0 4px 24px rgba(99,102,241,0.18),
+    0 0 16px rgba(99,102,241,0.08);
+  transform: translateY(-0.5px);
+}
+
+/* Success/green — tinted clear glass */
+html.glass button[style*="#22c55e"] {
+  background: rgba(34,197,94,0.20) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(34,197,94,0.25),
+    inset 0 0.5px 0 rgba(255,255,255,0.25),
+    0 2px 12px rgba(34,197,94,0.10);
+}
+
+/* Danger/red — tinted clear glass */
+html.glass button[style*="#ef4444"] {
+  background: rgba(239,68,68,0.20) !important;
+  box-shadow:
+    0 0 0 0.5px rgba(239,68,68,0.25),
+    inset 0 0.5px 0 rgba(255,255,255,0.20),
+    0 2px 12px rgba(239,68,68,0.10);
+}
+
+/* ── Scrollbar for glass ── */
+html.glass .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.30);
+}
+html.glass .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.45);
+}
+
+/* ── Inputs & selects glass style ── */
+html.glass input,
+html.glass select,
+html.glass textarea {
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  background: rgba(255,255,255,0.12) !important;
+  border: 1px solid rgba(255,255,255,0.30) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.20);
+}
+
+html.glass input:focus,
+html.glass select:focus,
+html.glass textarea:focus {
+  border-color: rgba(99,102,241,0.50) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.20),
+    0 0 0 3px rgba(99,102,241,0.12);
+}

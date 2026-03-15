@@ -1,0 +1,23 @@
+import { useState } from 'react';
+import { useStore } from './store/useStore';
+
+function App() {
+  const { theme } = useStore();
+  
+  return (
+    <div className={`h-screen w-full flex items-center justify-center ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+      <div className="text-center p-20 border-4 border-dashed border-blue-500 rounded-[3rem]">
+        <h1 className="text-6xl font-black mb-4">DEBUG MODE</h1>
+        <p className="text-xl opacity-50">如果看到此界面，说明 React 已成功挂载。</p>
+        <button 
+          onClick={() => alert('Interaction check OK')}
+          className="mt-8 px-10 py-4 bg-blue-600 rounded-2xl font-bold shadow-2xl hover:bg-blue-500 transition-all"
+        >
+          点击测试交互
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default App;
