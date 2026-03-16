@@ -15,6 +15,7 @@ use crate::db::DbPool;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 use types::*;
+use crate::app_log;
 
 // ═══════════════════════════════════════════════
 // Agent Run — v2 Step-based Executor
@@ -26,6 +27,13 @@ pub async fn agent_run(
     pool: State<'_, DbPool>,
     req: AgentRunRequest,
 ) -> Result<AgentRunResult, String> {
+    crate::logger::init();
+    app_log!("AGENT", "========== AGENT RUN START ==========");
+    app_log!("AGENT", "prompt: {}", &req.prompt);
+    app_log!("AGENT", "goal: {:?}", &req.goal);
+    app_log!("AGENT", "model_config_id: {:?}", &req.model_config_id);
+    app_log!("AGENT", "enabled_tools count: {:?}", req.enabled_tools.as_ref().map(|v| v.len()));
+    app_log!("AGENT", "context_files: {:?}", &req.context_files);
     let mut steps_log: Vec<AgentStep> = Vec::new();
 
     // ── Layer 1: LLM Provider Selection ──
@@ -69,12 +77,21 @@ pub async fn agent_run(
         std::time::Duration::from_secs(120)
     };
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .timeout(timeout)
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .no_proxy()
+        .connect_timeout(std::time::Duration::from_secs(30));
+
+    // Only bypass proxy for local models (localhost/127.0.0.1)
+    // Remote APIs (SiliconFlow, OpenAI etc.) need system proxy
+    if is_local {
+        client_builder = client_builder.no_proxy();
+    }
+
+    let client = client_builder
         .build()
         .map_err(|e| format!("无法构建 HTTP 客户端: {}", e))?;
+
+    app_log!("AGENT", "HTTP client built: is_local={}, proxy={}", is_local, if is_local { "disabled" } else { "system" });
 
     let api_key = crate::ai::resolve_local_bearer_token(
         config.api_key.unwrap_or_default().trim().to_string(),
@@ -88,6 +105,11 @@ pub async fn agent_run(
         model_name: config.model_name.clone(),
         is_local,
     };
+
+    app_log!("AGENT", "LLM endpoint: {}", &llm.endpoint);
+    app_log!("AGENT", "LLM model: {}", &llm.model_name);
+    app_log!("AGENT", "LLM is_local: {}", llm.is_local);
+    app_log!("AGENT", "LLM api_key present: {}", !llm.api_key.is_empty());
 
     // ── Layer 4: Memory — Create or Resume Task ──
     let task_id = if let Some(ref existing_id) = req.task_id {
@@ -108,25 +130,53 @@ pub async fn agent_run(
     // Ensure v2 tables
     memory::ensure_v2_tables(&*pool).await;
 
-    // Build tools list (filtered by enabled_tools)
+    // Build tools list (filtered by enabled_tools, always exclude ai_chat which is a no-op)
     let all_tools = tool_runtime::get_builtin_tools();
-    let tools: Vec<ToolDef> = if let Some(ref enabled) = req.enabled_tools {
+    let mut tools: Vec<ToolDef> = if let Some(ref enabled) = req.enabled_tools {
         all_tools
-            .into_iter()
-            .filter(|t| enabled.contains(&t.function.name))
+            .iter()
+            .filter(|t| enabled.contains(&t.function.name) && t.function.name != "ai_chat")
+            .cloned()
             .collect()
     } else {
-        all_tools
+        all_tools.iter().filter(|t| t.function.name != "ai_chat").cloned().collect()
     };
+    // Fallback: if filtering left us with zero tools, provide all tools (minus ai_chat)
+    if tools.is_empty() {
+        app_log!("AGENT", "WARNING: enabled_tools filter resulted in 0 tools, falling back to all tools");
+        tools = all_tools.into_iter().filter(|t| t.function.name != "ai_chat").collect();
+    }
 
     // Build system prompt
     let mut system_prompt = req.system_prompt.unwrap_or_else(|| {
-        "你是一个专业的通信工程项目 AI 助手。你可以通过调用工具来完成用户的任务。\n\
-         当需要操作文件、查询项目数据或执行命令时，请调用相应的工具。\n\
-         完成任务后，请给出清晰的总结。如果任务无法完成，请说明原因。\n\
-         如果工具调用失败，请分析原因并尝试其他方法。"
-            .into()
+        concat!(
+            "你是一个自动执行任务的 AI Agent，运行在 Windows 操作系统上。\n",
+            "你的工作方式：分析任务 -> 立即调用工具执行 -> 报告结果。\n\n",
+            "## 绝对禁止\n",
+            "- 禁止使用 ai_chat 工具 — 它没有任何执行能力\n",
+            "- 不要生成代码让用户去执行，你必须自己用工具完成\n",
+            "- 不要请求用户确认或提供更多信息\n",
+            "- 不要描述你打算做什么，直接调用工具\n",
+            "- 不要使用 Linux 命令或 Linux 路径\n\n",
+            "## 必须遵守\n",
+            "- 直接调用工具来完成任务，不要犹豫\n",
+            "- 获取网络内容（天气、新闻等）→ 用 browser_navigate\n",
+            "- 执行命令/脚本 → 用 shell_run（PowerShell语法）\n",
+            "- 发送邮件 → 用 shell_run 执行 PowerShell Send-MailMessage\n",
+            "- 读写文件 → 用 file_read / file_write\n",
+            "- 使用 Windows 风格路径\n",
+            "- 每步完成后简要报告结果\n\n",
+            "完成任务后，给出清晰的最终总结。"
+        ).into()
     });
+
+    // Inject real user environment info
+    let username = std::env::var("USERNAME").unwrap_or_else(|_| "user".into());
+    let userprofile = std::env::var("USERPROFILE").unwrap_or_else(|_| format!("C:\\Users\\{}", username));
+    system_prompt.push_str(&format!(
+        "\n\n## 当前环境\n- Windows 用户名: {}\n- 桌面路径: {}\\Desktop\n- 文档路径: {}\\Documents\n- 使用以上真实路径，不要编造用户名或路径！\n",
+        username, userprofile, userprofile
+    ));
 
     // Inject context files
     if let Some(ref files) = req.context_files {
@@ -146,9 +196,27 @@ pub async fn agent_run(
     // ── Layer 2: Task Planning ──
     let goal = req.goal.as_deref().unwrap_or(&req.prompt).to_string();
 
-    let plan = match planner::generate_plan(&llm, &client, &goal).await {
-        Ok(p) => p,
-        Err(_) => {
+    // Build tool descriptions for planner awareness
+    let tool_descriptions: String = tools
+        .iter()
+        .map(|t| format!("- `{}`: {}", t.function.name, t.function.description))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    app_log!("AGENT", "tools count: {}", tools.len());
+    app_log!("AGENT", "tool_descriptions:\n{}", &tool_descriptions);
+    app_log!("AGENT", "Calling planner::generate_plan...");
+
+    let plan = match planner::generate_plan(&llm, &client, &goal, &tool_descriptions).await {
+        Ok(p) => {
+            app_log!("AGENT", "Plan generated: {} steps", p.steps.len());
+            for s in &p.steps {
+                app_log!("AGENT", "  step {}: {}", s.id, s.task);
+            }
+            p
+        }
+        Err(e) => {
+            app_log!("AGENT", "Plan generation FAILED: {}", e);
             // Fallback: single step plan
             AgentPlan {
                 steps: vec![PlanStep {
@@ -237,6 +305,8 @@ pub async fn agent_run(
     let mut step_idx = 0;
     while step_idx < plan_steps.len() {
         let mut step = plan_steps[step_idx].clone();
+
+        app_log!("AGENT", "--- Executing step {} / {}: {} ---", step.id, plan_steps.len(), step.task);
 
         let result = executor::execute_step(
             &mut ctx,

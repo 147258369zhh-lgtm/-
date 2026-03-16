@@ -1,5 +1,6 @@
 use super::types::{AgentPlan, LlmConfig, PlanStep, StepStatus};
 use serde_json::{json, Value};
+use crate::app_log;
 
 // ═══════════════════════════════════════════════
 // Planner Engine — Goal → Structured Plan
@@ -10,8 +11,9 @@ pub async fn generate_plan(
     llm: &LlmConfig,
     client: &reqwest::Client,
     goal: &str,
+    tool_descriptions: &str,
 ) -> Result<AgentPlan, String> {
-    let prompt = super::prompt_builder::build_planner_prompt(goal);
+    let prompt = super::prompt_builder::build_planner_prompt(goal, tool_descriptions);
 
     let messages = vec![
         json!({"role": "system", "content": prompt}),
@@ -32,7 +34,12 @@ pub async fn generate_plan(
     let resp = request
         .send()
         .await
-        .map_err(|e| format!("规划请求失败: {}", e))?;
+        .map_err(|e| {
+            app_log!("PLANNER", "HTTP request FAILED: {}", e);
+            format!("规划请求失败: {}", e)
+        })?;
+
+    app_log!("PLANNER", "HTTP status: {}", resp.status());
 
     if !resp.status().is_success() {
         let body = resp.text().await.unwrap_or_default();
@@ -48,6 +55,8 @@ pub async fn generate_plan(
         .as_str()
         .unwrap_or("")
         .to_string();
+
+    app_log!("PLANNER", "LLM planner response ({} chars): {}", content.len(), &content[..content.len().min(2000)]);
 
     parse_plan_response(&content)
 }

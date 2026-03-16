@@ -3,9 +3,11 @@ mod ai;
 mod automation;
 mod commands;
 mod db;
+pub mod logger;
 mod mcp;
 mod models;
 mod rag;
+pub mod tools;
 pub mod utils;
 
 use std::path::PathBuf;
@@ -92,6 +94,7 @@ pub fn run() {
             mcp::commands::mcp_install_from_source,
             mcp::commands::mcp_install_npm,
             mcp::commands::mcp_get_installed_skills,
+            mcp::commands::mcp_startup_all,
             mcp::commands::mcp_open_url,
             rag::index_document,
             rag::rag_query,

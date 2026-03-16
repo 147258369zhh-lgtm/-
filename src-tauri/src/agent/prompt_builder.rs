@@ -5,15 +5,24 @@ use super::types::{AgentContext, PlanStep};
 // ═══════════════════════════════════════════════
 
 /// Build system prompt for the planner (goal → structured plan)
-pub fn build_planner_prompt(goal: &str) -> String {
+pub fn build_planner_prompt(goal: &str, tool_descriptions: &str) -> String {
     format!(
-        "你是一个任务规划专家。请将用户的目标拆解为 3-7 个可执行的子任务步骤。\n\
-         每个步骤应该是具体的、可执行的操作。\n\n\
-         用 JSON 格式返回:\n\
-         {{\"steps\": [{{\"id\": 1, \"task\": \"步骤描述\"}}, {{\"id\": 2, \"task\": \"步骤描述\"}}]}}\n\n\
-         只返回 JSON，不要其他内容。\n\n\
+        "你是任务规划专家。将用户目标拆解为 2-4 个可直接执行的步骤。\n\n\
+         ## 关键规则\n\
+         1. 每个步骤必须使用一个**具体的执行工具**来完成\n\
+         2. **绝对禁止使用 ai_chat 工具** — 它不能执行任何实际操作\n\
+         3. 获取网络信息（天气、新闻等）→ 使用 browser_navigate\n\
+         4. 执行命令/脚本/发邮件 → 使用 shell_run\n\
+         5. 读写文件 → 使用 file_read / file_write\n\
+         6. 读写Excel → 使用 excel_read / excel_write\n\
+         7. 步骤要少而精，不要拆得太细\n\n\
+         ## 可用工具\n{}\n\n\
+         ## 输出格式\n\
+         JSON格式：\n\
+         {{\"steps\": [{{\"id\": 1, \"task\": \"使用 browser_navigate 访问天气网站获取天气数据\"}}, {{\"id\": 2, \"task\": \"使用 shell_run 通过PowerShell发送邮件\"}}]}}\n\n\
+         只返回JSON。\n\n\
          目标: {}",
-        goal
+        tool_descriptions, goal
     )
 }
 
@@ -143,26 +152,42 @@ pub fn build_summary_prompt(goal: &str, completed: &[PlanStep]) -> String {
 /// Inject context files into system prompt
 pub async fn inject_context_files(base_prompt: &str, files: &[String]) -> String {
     let mut result = base_prompt.to_string();
-    let mut ctx = String::from("\n\n以下是用户提供的参考文件内容:\n");
+
+    if files.is_empty() {
+        return result;
+    }
+
+    let mut ctx = String::from("\n\n## 用户提供的文件\n");
+    ctx.push_str("以下是用户附带的文件。你必须使用这些真实路径，不要自己编造路径：\n\n");
 
     for path in files {
-        match tokio::fs::read_to_string(path).await {
-            Ok(content) => {
-                let truncated = if content.len() > 3000 {
-                    let end = content
-                        .char_indices()
-                        .take_while(|&(i, _)| i <= 3000)
-                        .last()
-                        .map(|(i, _)| i)
-                        .unwrap_or(content.len());
-                    format!("{}\\n...(已截断)", &content[..end])
-                } else {
-                    content
-                };
-                ctx.push_str(&format!("\n--- 文件: {} ---\n{}\n", path, truncated));
-            }
-            Err(_) => {
-                ctx.push_str(&format!("\n--- 文件: {} (无法读取) ---\n", path));
+        let ext = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let is_binary = matches!(ext.as_str(), "xlsx" | "xls" | "doc" | "docx" | "pdf" | "ppt" | "pptx" | "zip" | "png" | "jpg" | "jpeg");
+
+        if is_binary {
+            let tool_hint = match ext.as_str() {
+                "xlsx" | "xls" => "-> 请使用 excel_read 工具读取此文件",
+                _ => "-> 此文件为二进制格式",
+            };
+            ctx.push_str(&format!("- 文件路径: `{}`\n  类型: {} {}\n\n", path, ext.to_uppercase(), tool_hint));
+        } else {
+            match tokio::fs::read_to_string(path).await {
+                Ok(content) => {
+                    let truncated = if content.len() > 5000 {
+                        format!("{}...\n(已截断，共{}字符)", &content[..5000], content.len())
+                    } else {
+                        content
+                    };
+                    ctx.push_str(&format!("- 文件路径: `{}`\n内容:\n```\n{}\n```\n\n", path, truncated));
+                }
+                Err(e) => {
+                    ctx.push_str(&format!("- 文件路径: `{}`（读取失败: {}）\n\n", path, e));
+                }
             }
         }
     }

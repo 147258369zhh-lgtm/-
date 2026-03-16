@@ -1,0 +1,70 @@
+﻿    //  Step 2: Generate flow nodes from AI-selected tools (Star Topology) 
+    setNodes([]);
+    setEdges([]);
+
+    const generatedNodes: Node[] = [];
+    const generatedEdges: Edge[] = [];
+    let nodeIndex = 0;
+
+    const addNodeAt = (type: string, label: string, detail: string, position: {x: number, y: number}, extra: Record<string, any> = {}) => {
+      const id = \uto_\_\\;
+      generatedNodes.push({ id, type, position, data: { label, detail, ...extra } });
+      nodeIndex++;
+      return id;
+    };
+
+    // Center LLM
+    const llmId = addNodeAt('agent-llm', ' 大模型', '处理对话和调度工具', {x: 400, y: 300}, {
+      model: selectedModelId ? aiConfigs.find(c => c.id === selectedModelId)?.model_name || '未选择' : '自动选择'
+    });
+    
+    // Top Instruction
+    const finalInstruction = parsedInstruction || systemInstruction || '你是一个智能助手';
+    const instrId = addNodeAt('agent-instruction', ' 系统指令', finalInstruction, {x: 400, y: 100});
+
+    // Output at the bottom
+    const outputId = addNodeAt('agent-output', ' 对话输出', 'Agent 的最终回答', {x: 400, y: 550});
+
+    // Tools and files placed around the center model
+    const toolIds: string[] = [];
+    const fileInputToolNames = ['file_read', 'excel_read', 'word_read', 'ppt_read'];
+    const needsFileInput = selectedTools.some(t => fileInputToolNames.includes(t));
+    
+    let fileInputId: string | null = null;
+    if (needsFileInput) {
+      fileInputId = addNodeAt('agent-file', ' 文件输入', '选择要处理的文件', {x: 750, y: 150});
+    }
+
+    selectedTools.forEach((toolName, idx) => {
+      const toolInfo = AVAILABLE_TOOLS.find(t => t.name === toolName);
+      if (toolInfo) {
+        // Distribute tools to the left and right of the LLM
+        const isLeft = idx % 2 === 0;
+        const xOffset = isLeft ? 50 : 750;
+        const yOffset = 250 + Math.floor(idx / 2) * 160;
+        
+        const toolId = addNodeAt('agent-skill', toolInfo.label, toolInfo.desc, {x: xOffset, y: yOffset}, { toolName });
+        toolIds.push(toolId);
+        setEnabledTools(prev => { const next = new Set(prev); next.add(toolName); return next; });
+      }
+    });
+
+    //  Build Edges (Star Topology) 
+    // Instruction guides the LLM
+    generatedEdges.push({ id: \e_\_\\, source: instrId, target: llmId, animated: true });
+    
+    // File inputs feed into the LLM context
+    if (fileInputId) {
+      generatedEdges.push({ id: \e_\_\\, source: fileInputId, target: llmId, animated: true });
+    }
+
+    // Tools connect to the LLM (they are used by it)
+    for (const toolId of toolIds) {
+      generatedEdges.push({ id: \e_\_\\, source: toolId, target: llmId, animated: true });
+    }
+
+    // LLM outputs the final result
+    generatedEdges.push({ id: \e_\_\\, source: llmId, target: outputId, animated: true });
+
+    setNodes(generatedNodes);
+    setEdges(generatedEdges);

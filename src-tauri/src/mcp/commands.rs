@@ -1,5 +1,6 @@
 use crate::mcp::client::McpClientManager;
 use serde_json::{json, Value};
+use sqlx::Column;
 use tauri::{Manager, State};
 
 #[tauri::command]
@@ -21,27 +22,76 @@ pub async fn mcp_call_internal_tool(
     use tauri::Manager;
     let pool = handle.state::<crate::db::DbPool>();
 
+    // 1. Database-bound tools (need pool state)
     match tool_name.as_str() {
-        "get_design_context" => {
+        "get_design_context" | "project_context" => {
             let project_id = arguments
                 .get("project_id")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            crate::commands::get_design_context(pool, project_id)
+            return crate::commands::get_design_context(pool, project_id)
                 .await
-                .map(|s| serde_json::json!({ "context": s }))
+                .map(|s| serde_json::json!({ "context": s }));
         }
-        "list_files" => {
+        "list_files" | "project_files" => {
             let project_id = arguments
                 .get("project_id")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing project_id")?;
-            crate::commands::list_project_files(pool, project_id.to_string())
+            return crate::commands::list_project_files(pool, project_id.to_string())
                 .await
-                .map(|f| serde_json::json!(f))
+                .map(|f| serde_json::json!(f));
         }
-        _ => Err(format!("Unknown internal tool: {}", tool_name)),
+        "project_list" => {
+            return crate::commands::list_projects(pool)
+                .await
+                .map(|p| serde_json::json!(p));
+        }
+        "template_list" => {
+            return crate::commands::list_templates(pool)
+                .await
+                .map(|t| serde_json::json!(t));
+        }
+        "common_info_list" => {
+            return crate::commands::list_common_info(pool)
+                .await
+                .map(|c| serde_json::json!(c));
+        }
+        "survey_get" => {
+            let project_id = arguments
+                .get("project_id")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing project_id")?;
+            return crate::commands::get_survey(pool, project_id.to_string())
+                .await
+                .map(|s| serde_json::json!(s));
+        }
+        "sql_query" => {
+            // Execute raw SQL query against the app database
+            let query = arguments.get("query").and_then(|v| v.as_str()).ok_or("Missing 'query'")?;
+            let rows: Vec<serde_json::Value> = sqlx::query(query)
+                .fetch_all(&*pool)
+                .await
+                .map_err(|e| e.to_string())?
+                .iter()
+                .map(|row| {
+                    use sqlx::Row;
+                    let cols = row.columns();
+                    let mut obj = serde_json::Map::new();
+                    for col in cols {
+                        let val: String = row.try_get(col.name()).unwrap_or_default();
+                        obj.insert(col.name().to_string(), serde_json::json!(val));
+                    }
+                    serde_json::Value::Object(obj)
+                })
+                .collect();
+            return Ok(serde_json::json!({"rows": rows, "count": rows.len()}));
+        }
+        _ => {}
     }
+
+    // 2. All other tools -> dispatch to tools module
+    crate::tools::execute_tool(&tool_name, arguments).await
 }
 
 /// Helper: translate text using MyMemory free API (en -> zh)
@@ -808,6 +858,74 @@ pub async fn mcp_list_tools(
     manager: State<'_, McpClientManager>,
 ) -> Result<serde_json::Value, String> {
     manager.list_tools().await
+}
+
+/// Start all installed MCP Servers from the database
+/// Called at app startup or after a new install to activate MCP processes
+#[tauri::command]
+pub async fn mcp_startup_all(
+    app_handle: tauri::AppHandle,
+    manager: State<'_, McpClientManager>,
+) -> Result<serde_json::Value, String> {
+    use tauri::Manager;
+    let pool = app_handle.state::<crate::db::DbPool>();
+
+    // Ensure table exists
+    let _ = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS installed_mcps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            npm_package TEXT,
+            install_method TEXT DEFAULT 'npm',
+            launch_command TEXT,
+            installed_at TEXT DEFAULT (datetime('now')),
+            status TEXT DEFAULT 'installed'
+        )",
+    )
+    .execute(pool.inner())
+    .await;
+
+    // Fetch all installed MCPs that have a launch command
+    let rows = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
+        "SELECT name, npm_package, launch_command FROM installed_mcps WHERE status = 'installed' AND launch_command IS NOT NULL"
+    )
+    .fetch_all(pool.inner())
+    .await
+    .map_err(|e| format!("查询已安装 MCP 失败: {}", e))?;
+
+    let mut started = Vec::new();
+    let mut failed = Vec::new();
+
+    for (name, _npm_package, launch_cmd) in &rows {
+        if let Some(cmd) = launch_cmd {
+            // Parse command: "npx @package/name" -> command="npx", args=["@package/name"]
+            let parts: Vec<&str> = cmd.split_whitespace().collect();
+            if parts.is_empty() {
+                failed.push(format!("{}: 空的启动命令", name));
+                continue;
+            }
+
+            let command = parts[0];
+            let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+
+            match manager.connect_stdio(name, command, &args).await {
+                Ok(()) => {
+                    println!("✅ MCP Server '{}' started: {}", name, cmd);
+                    started.push(name.clone());
+                }
+                Err(e) => {
+                    println!("❌ MCP Server '{}' failed: {}", name, e);
+                    failed.push(format!("{}: {}", name, e));
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "started": started,
+        "failed": failed,
+        "total": rows.len()
+    }))
 }
 
 #[tauri::command]
