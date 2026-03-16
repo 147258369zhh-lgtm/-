@@ -1,14 +1,15 @@
+mod agent;
 mod ai;
 mod automation;
 mod commands;
 mod db;
-mod models;
 mod mcp;
+mod models;
 mod rag;
 pub mod utils;
 
-use tauri::Manager;
 use std::path::PathBuf;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,10 +20,10 @@ pub fn run() {
                 let pool = db::init_db(&handle)
                     .await
                     .expect("Failed to initialize database");
-                
+
                 // Initialize MCP Client Manager
                 let mcp_manager = mcp::client::McpClientManager::new();
-                
+
                 handle.manage(pool);
                 handle.manage(mcp_manager);
             });
@@ -89,6 +90,7 @@ pub fn run() {
             mcp::commands::mcp_list_sources,
             mcp::commands::mcp_import_skill,
             mcp::commands::mcp_install_from_source,
+            mcp::commands::mcp_install_npm,
             mcp::commands::mcp_get_installed_skills,
             mcp::commands::mcp_open_url,
             rag::index_document,
@@ -97,7 +99,8 @@ pub fn run() {
             rag::get_embedding_status,
             rag::init_embedding_model,
             rag::rebuild_all_indexes,
-            convert_to_pdf
+            convert_to_pdf,
+            agent::agent_run
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

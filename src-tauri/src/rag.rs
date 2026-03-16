@@ -1,7 +1,7 @@
 use crate::db::DbPool;
 use serde::Serialize;
-use tauri::State;
 use std::sync::{Mutex, OnceLock};
+use tauri::State;
 
 // ─── Multi-backend Embedding Engine ───────────────────────────────
 
@@ -16,9 +16,11 @@ fn get_local_model_embed(texts: Vec<&str>) -> Result<Vec<Vec<f32>>, String> {
             .expect("Failed to initialize local embedding model");
         Mutex::new(m)
     });
-    
+
     let guard = model.lock().map_err(|e| format!("模型锁失败: {}", e))?;
-    guard.embed(texts, None).map_err(|e| format!("本地嵌入计算失败: {}", e))
+    guard
+        .embed(texts, None)
+        .map_err(|e| format!("本地嵌入计算失败: {}", e))
 }
 
 fn is_local_model_ready() -> bool {
@@ -26,43 +28,41 @@ fn is_local_model_ready() -> bool {
 }
 
 /// Generate embeddings using the configured engine
-async fn generate_embeddings(
+pub async fn generate_embeddings(
     pool: &DbPool,
     texts: Vec<String>,
 ) -> Result<Vec<Vec<f32>>, String> {
     // Read engine setting
-    let engine: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_engine'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_else(|| "local".to_string());
+    let engine: String =
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_engine'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "local".to_string());
 
     match engine.as_str() {
         "lmstudio" | "online" => {
             // Use external OpenAI-compatible /v1/embeddings API
-            let base_url: String = sqlx::query_scalar(
-                "SELECT value FROM settings WHERE key = 'embedding_base_url'"
-            )
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "http://127.0.0.1:1234/v1".to_string());
+            let base_url: String =
+                sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_base_url'")
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_else(|| "http://127.0.0.1:1234/v1".to_string());
 
-            let api_key: String = sqlx::query_scalar(
-                "SELECT value FROM settings WHERE key = 'embedding_api_key'"
-            )
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .unwrap_or_default();
+            let api_key: String =
+                sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_api_key'")
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_default();
 
-            let model_name: String = sqlx::query_scalar(
-                "SELECT value FROM settings WHERE key = 'embedding_model_name'"
-            )
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .unwrap_or_else(|| "nomic-embed-text".to_string());
+            let model_name: String =
+                sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_model_name'")
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_else(|| "nomic-embed-text".to_string());
 
             call_api_embeddings(&base_url, &api_key, &model_name, &texts).await
         }
@@ -137,10 +137,9 @@ fn extract_text(file_path: &str, ext: &str) -> Result<String, String> {
         "doc" | "docx" => extract_docx(file_path),
         "xls" | "xlsx" => extract_excel(file_path),
         "csv" => std::fs::read_to_string(file_path).map_err(|e| e.to_string()),
-        "txt" | "md" | "json" | "xml" | "yaml" | "yml" | "html" | "css" |
-        "js" | "ts" | "tsx" | "jsx" | "py" | "java" | "cpp" | "c" | "h" |
-        "cs" | "vb" | "go" | "rs" | "rb" | "php" | "swift" | "kt" | "sql" |
-        "sh" | "bat" | "cmd" | "ps1" | "ini" | "cfg" | "log" => {
+        "txt" | "md" | "json" | "xml" | "yaml" | "yml" | "html" | "css" | "js" | "ts" | "tsx"
+        | "jsx" | "py" | "java" | "cpp" | "c" | "h" | "cs" | "vb" | "go" | "rs" | "rb" | "php"
+        | "swift" | "kt" | "sql" | "sh" | "bat" | "cmd" | "ps1" | "ini" | "cfg" | "log" => {
             std::fs::read_to_string(file_path).map_err(|e| e.to_string())
         }
         _ => Err(format!("不支持提取此文件格式的文本: {}", ext)),
@@ -156,14 +155,17 @@ fn extract_docx(path: &str) -> Result<String, String> {
     use std::io::Read;
 
     let file = std::fs::File::open(path).map_err(|e| format!("打开DOCX文件失败: {}", e))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("DOCX不是有效的ZIP: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("DOCX不是有效的ZIP: {}", e))?;
 
     // Read word/document.xml
     let mut xml_content = String::new();
     {
-        let mut doc_xml = archive.by_name("word/document.xml")
+        let mut doc_xml = archive
+            .by_name("word/document.xml")
             .map_err(|e| format!("找不到document.xml: {}", e))?;
-        doc_xml.read_to_string(&mut xml_content)
+        doc_xml
+            .read_to_string(&mut xml_content)
             .map_err(|e| format!("读取document.xml失败: {}", e))?;
     }
 
@@ -187,7 +189,8 @@ fn extract_docx(path: &str) -> Result<String, String> {
         // Re-extract with paragraph awareness
         text.clear();
         for segment in &segments {
-            let seg_text: String = re.captures_iter(segment)
+            let seg_text: String = re
+                .captures_iter(segment)
                 .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
                 .collect::<Vec<_>>()
                 .join("");
@@ -203,10 +206,9 @@ fn extract_docx(path: &str) -> Result<String, String> {
 }
 
 fn extract_excel(path: &str) -> Result<String, String> {
-    use calamine::{Reader, open_workbook_auto};
+    use calamine::{open_workbook_auto, Reader};
 
-    let mut workbook = open_workbook_auto(path)
-        .map_err(|e| format!("Excel读取失败: {}", e))?;
+    let mut workbook = open_workbook_auto(path).map_err(|e| format!("Excel读取失败: {}", e))?;
 
     let mut text = String::new();
     let sheet_names = workbook.sheet_names().to_vec();
@@ -215,10 +217,15 @@ fn extract_excel(path: &str) -> Result<String, String> {
         text.push_str(&format!("=== Sheet: {} ===\n", name));
         if let Ok(range) = workbook.worksheet_range(name) {
             for row in range.rows() {
-                let row_parts: Vec<String> = row.iter()
+                let row_parts: Vec<String> = row
+                    .iter()
                     .filter_map(|cell| {
                         let s = cell.to_string();
-                        if s.is_empty() { None } else { Some(s) }
+                        if s.is_empty() {
+                            None
+                        } else {
+                            Some(s)
+                        }
                     })
                     .collect();
                 if !row_parts.is_empty() {
@@ -257,7 +264,7 @@ fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
 
 // ─── Cosine Similarity ───────────────────────────────────────────
 
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
     }
@@ -274,7 +281,7 @@ fn f32_vec_to_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
-fn bytes_to_f32_vec(b: &[u8]) -> Vec<f32> {
+pub fn bytes_to_f32_vec(b: &[u8]) -> Vec<f32> {
     b.chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect()
@@ -341,17 +348,14 @@ pub async fn index_document(
 
 /// Query the knowledge base with RAG (hybrid: keyword + semantic)
 #[tauri::command]
-pub async fn rag_query(
-    pool: State<'_, DbPool>,
-    question: String,
-) -> Result<String, String> {
+pub async fn rag_query(pool: State<'_, DbPool>, question: String) -> Result<String, String> {
     // 1. Embed the question
     let q_embeddings = generate_embeddings(pool.inner(), vec![question.clone()]).await?;
     let q_vec = q_embeddings.first().ok_or("嵌入问题向量失败")?;
 
     // 2. Load all chunks from DB
     let rows: Vec<(String, String, Vec<u8>)> = sqlx::query_as(
-        "SELECT template_id, content, embedding FROM kb_chunks WHERE embedding IS NOT NULL"
+        "SELECT template_id, content, embedding FROM kb_chunks WHERE embedding IS NOT NULL",
     )
     .fetch_all(pool.inner())
     .await
@@ -368,7 +372,7 @@ pub async fn rag_query(
             .replace('✕', "x")
             .replace('＊', "*")
             .replace('＋', "+")
-            .replace('\u{00d7}', "x")  // Unicode multiplication sign
+            .replace('\u{00d7}', "x") // Unicode multiplication sign
             .replace('Ｘ', "x")
             .replace('ｘ', "x")
     }
@@ -436,7 +440,8 @@ pub async fn rag_query(
     );
 
     // Get AI config via module routing (module = "rag")
-    let config = crate::ai::resolve_ai_config(pool.inner(), Some("rag")).await
+    let config = crate::ai::resolve_ai_config(pool.inner(), Some("rag"))
+        .await
         .map_err(|e| format!("未配置激活的 AI 模型，请先在设置中配置: {}", e))?;
 
     // Build the chat request
@@ -466,7 +471,10 @@ pub async fn rag_query(
     }
 
     let resp = req.send().await.map_err(|e| format!("AI请求失败: {}", e))?;
-    let resp_json: serde_json::Value = resp.json().await.map_err(|e| format!("解析AI响应失败: {}", e))?;
+    let resp_json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析AI响应失败: {}", e))?;
 
     let answer = resp_json["choices"][0]["message"]["content"]
         .as_str()
@@ -477,11 +485,19 @@ pub async fn rag_query(
         _ => {
             // Return diagnostic info: what chunks were found + raw AI response
             let mut diag = String::from("⚠️ AI 模型未返回有效回答。\n\n");
-            diag.push_str(&format!("📡 AI 原始响应: {}\n\n", serde_json::to_string_pretty(&resp_json).unwrap_or_default()));
+            diag.push_str(&format!(
+                "📡 AI 原始响应: {}\n\n",
+                serde_json::to_string_pretty(&resp_json).unwrap_or_default()
+            ));
             diag.push_str("📋 检索到的相关数据片段预览:\n\n");
             for (i, (score, _tid, content)) in top_chunks.iter().take(3).enumerate() {
                 let preview: String = content.chars().take(300).collect();
-                diag.push_str(&format!("片段{} (相关度{:.0}%): {}...\n\n", i+1, score*100.0, preview));
+                diag.push_str(&format!(
+                    "片段{} (相关度{:.0}%): {}...\n\n",
+                    i + 1,
+                    score * 100.0,
+                    preview
+                ));
             }
             Ok(diag)
         }
@@ -490,36 +506,36 @@ pub async fn rag_query(
 
 /// Get indexing status for all knowledge base items
 #[tauri::command]
-pub async fn get_index_status(
-    pool: State<'_, DbPool>,
-) -> Result<Vec<IndexStatus>, String> {
-    let rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT template_id, COUNT(*) as cnt FROM kb_chunks GROUP BY template_id"
-    )
-    .fetch_all(pool.inner())
-    .await
-    .map_err(|e| e.to_string())?;
+pub async fn get_index_status(pool: State<'_, DbPool>) -> Result<Vec<IndexStatus>, String> {
+    let rows: Vec<(String, i64)> =
+        sqlx::query_as("SELECT template_id, COUNT(*) as cnt FROM kb_chunks GROUP BY template_id")
+            .fetch_all(pool.inner())
+            .await
+            .map_err(|e| e.to_string())?;
 
     Ok(rows
         .into_iter()
         .map(|(tid, cnt)| IndexStatus {
             template_id: tid,
             chunk_count: cnt,
-            status: if cnt > 0 { "indexed".into() } else { "none".into() },
+            status: if cnt > 0 {
+                "indexed".into()
+            } else {
+                "none".into()
+            },
         })
         .collect())
 }
 
 /// Get embedding engine status (model downloaded, etc.)
 #[tauri::command]
-pub async fn get_embedding_status(
-    pool: State<'_, DbPool>,
-) -> Result<serde_json::Value, String> {
-    let engine: String = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_engine'")
-        .fetch_optional(pool.inner())
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_else(|| "local".to_string());
+pub async fn get_embedding_status(pool: State<'_, DbPool>) -> Result<serde_json::Value, String> {
+    let engine: String =
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'embedding_engine'")
+            .fetch_optional(pool.inner())
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "local".to_string());
 
     let model_ready = if engine == "local" {
         is_local_model_ready()
@@ -541,9 +557,7 @@ pub async fn get_embedding_status(
 
 /// Initialize/download the embedding model (called from settings UI)
 #[tauri::command]
-pub async fn init_embedding_model(
-    pool: State<'_, DbPool>,
-) -> Result<String, String> {
+pub async fn init_embedding_model(pool: State<'_, DbPool>) -> Result<String, String> {
     // Trigger local model init by embedding a test string
     let result = generate_embeddings(pool.inner(), vec!["test".to_string()]).await;
     match result {
@@ -622,7 +636,11 @@ pub async fn rebuild_all_indexes(
                                 }
                             }
                         }
-                        if chunk_ok > 0 { success_count += 1; } else { fail_count += 1; }
+                        if chunk_ok > 0 {
+                            success_count += 1;
+                        } else {
+                            fail_count += 1;
+                        }
                     }
                     Err(e) => {
                         fail_count += 1;
@@ -647,7 +665,10 @@ pub async fn rebuild_all_indexes(
         .await
         .unwrap_or(0);
 
-    let mut msg = format!("索引完成: {}/{} 个文件成功, {} 个失败 (数据库共 {} 个文本块)", success_count, total, fail_count, total_chunks);
+    let mut msg = format!(
+        "索引完成: {}/{} 个文件成功, {} 个失败 (数据库共 {} 个文本块)",
+        success_count, total, fail_count, total_chunks
+    );
     if !errors.is_empty() {
         msg.push_str(&format!("\n错误详情: {}", errors.join("; ")));
     }

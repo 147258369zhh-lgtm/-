@@ -18,32 +18,56 @@ interface ProjectCardProps {
     onOpen: (id: string) => void;
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen }) => {
+// Static data extracted outside component to avoid recreation on every render
+const viewBox = { minX: 92, maxX: 108.8, minY: 32.4, maxY: 42.9 };
+const toSvgPoint = (lng: number, lat: number) => {
+    const x = ((lng - viewBox.minX) / (viewBox.maxX - viewBox.minX)) * 120;
+    const y = 120 - ((lat - viewBox.minY) / (viewBox.maxY - viewBox.minY)) * 120;
+    return { x, y };
+};
+const cityHighlights: Record<string, { x: number; y: number }> = {
+    '兰州': toSvgPoint(103.834, 36.061),
+    '酒泉': toSvgPoint(98.510, 39.744),
+    '嘉峪关': toSvgPoint(98.289, 39.773),
+    '张掖': toSvgPoint(100.455, 38.932),
+    '金昌': toSvgPoint(102.187, 38.521),
+    '武威': toSvgPoint(102.637, 37.929),
+    '白银': toSvgPoint(104.139, 36.545),
+    '天水': toSvgPoint(105.725, 34.579),
+    '庆阳': toSvgPoint(107.638, 35.734),
+    '平凉': toSvgPoint(106.685, 35.542),
+    '定西': toSvgPoint(104.626, 35.580),
+    '陇南': toSvgPoint(104.925, 33.400),
+    '临夏': toSvgPoint(103.210, 35.601),
+    '甘南': toSvgPoint(102.911, 34.987)
+};
+
+const cardIconStyle: React.CSSProperties = {
+    background: 'linear-gradient(145deg, rgba(59,130,246,0.12), rgba(59,130,246,0.02))',
+    borderRadius: 16,
+    width: 52,
+    height: 52,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid var(--popover-border)',
+    boxShadow: 'var(--popover-shadow)'
+};
+
+const cityBadgeTextStyle: React.CSSProperties = {
+    fontSize: 24,
+    fontWeight: 800,
+    color: 'var(--brand)',
+    letterSpacing: '0.04em',
+    fontFamily: '"STKaiti", "KaiTi", "Kaiti SC", "PingFang SC", "Microsoft YaHei", serif',
+    textShadow: '0 6px 12px rgba(37,99,235,0.18)',
+    transform: 'translateY(1px)'
+};
+
+export const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project, onOpen }) => {
     const [hovered, setHovered] = React.useState(false);
 
     const cityKey = (project.city || '').replace(/[市州地区盟]+/g, '');
-    const viewBox = { minX: 92, maxX: 108.8, minY: 32.4, maxY: 42.9 };
-    const toSvgPoint = (lng: number, lat: number) => {
-        const x = ((lng - viewBox.minX) / (viewBox.maxX - viewBox.minX)) * 120;
-        const y = 120 - ((lat - viewBox.minY) / (viewBox.maxY - viewBox.minY)) * 120;
-        return { x, y };
-    };
-    const cityHighlights: Record<string, { x: number; y: number }> = {
-        兰州: toSvgPoint(103.834, 36.061),
-        酒泉: toSvgPoint(98.510, 39.744),
-        嘉峪关: toSvgPoint(98.289, 39.773),
-        张掖: toSvgPoint(100.455, 38.932),
-        金昌: toSvgPoint(102.187, 38.521),
-        武威: toSvgPoint(102.637, 37.929),
-        白银: toSvgPoint(104.139, 36.545),
-        天水: toSvgPoint(105.725, 34.579),
-        庆阳: toSvgPoint(107.638, 35.734),
-        平凉: toSvgPoint(106.685, 35.542),
-        定西: toSvgPoint(104.626, 35.580),
-        陇南: toSvgPoint(104.925, 33.400),
-        临夏: toSvgPoint(103.210, 35.601),
-        甘南: toSvgPoint(102.911, 34.987)
-    };
     const highlight = cityHighlights[cityKey];
     const cityBadge = (cityKey || project.name || '兰').trim().slice(0, 1);
 
@@ -71,26 +95,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen }) => 
             }}
         >
             {/* Icon */}
-            <div style={{
-                background: 'linear-gradient(145deg, rgba(59,130,246,0.12), rgba(59,130,246,0.02))',
-                borderRadius: 16,
-                width: 52,
-                height: 52,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid var(--popover-border)',
-                boxShadow: 'var(--popover-shadow)'
-            }}>
-                <span style={{
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: 'var(--brand)',
-                    letterSpacing: '0.04em',
-                    fontFamily: '"STKaiti", "KaiTi", "Kaiti SC", "PingFang SC", "Microsoft YaHei", serif',
-                    textShadow: '0 6px 12px rgba(37,99,235,0.18)',
-                    transform: 'translateY(1px)'
-                }}>
+            <div style={cardIconStyle}>
+                <span style={cityBadgeTextStyle}>
                     {cityBadge}
                 </span>
             </div>
@@ -158,4 +164,4 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen }) => 
             </div>
         </div>
     );
-};
+});

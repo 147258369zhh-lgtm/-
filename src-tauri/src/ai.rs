@@ -30,7 +30,7 @@ pub struct ChatWithConfigRequest {
     pub req: ChatRequest,
 }
 
-async fn resolve_local_bearer_token(mut api_key: String, is_local: bool) -> String {
+pub async fn resolve_local_bearer_token(mut api_key: String, is_local: bool) -> String {
     if api_key.is_empty() && is_local {
         if let Ok(v) = std::env::var("LM_API_TOKEN") {
             let t = v.trim();
@@ -50,7 +50,10 @@ async fn resolve_local_bearer_token(mut api_key: String, is_local: bool) -> Stri
     api_key
 }
 
-fn extract_text_from_response(json_resp: &serde_json::Value, is_gemini: bool) -> Result<String, String> {
+fn extract_text_from_response(
+    json_resp: &serde_json::Value,
+    is_gemini: bool,
+) -> Result<String, String> {
     if is_gemini {
         let text = json_resp["candidates"][0]["content"]["parts"][0]["text"]
             .as_str()
@@ -148,27 +151,26 @@ pub async fn delete_ai_config(pool: State<'_, DbPool>, id: String) -> Result<(),
 /// 1. 如果 module 有值，先查 settings 表 `ai_route_{module}` 拿到 config_id
 /// 2. 通过 config_id 找到对应的 AiConfig
 /// 3. 如果没有配置路由或找不到对应 config，回退到第一个 is_active=1 的配置
-pub async fn resolve_ai_config(pool: &sqlx::SqlitePool, module: Option<&str>) -> Result<AiConfig, String> {
+pub async fn resolve_ai_config(
+    pool: &sqlx::SqlitePool,
+    module: Option<&str>,
+) -> Result<AiConfig, String> {
     // Step 1: 尝试按模块路由
     if let Some(m) = module {
         let route_key = format!("ai_route_{}", m);
-        let route: Option<(String,)> = sqlx::query_as(
-            "SELECT value FROM settings WHERE key = ?"
-        )
-        .bind(&route_key)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        let route: Option<(String,)> = sqlx::query_as("SELECT value FROM settings WHERE key = ?")
+            .bind(&route_key)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
         if let Some((config_id,)) = route {
             if !config_id.is_empty() {
-                let routed = sqlx::query_as::<_, AiConfig>(
-                    "SELECT * FROM ai_configs WHERE id = ?"
-                )
-                .bind(&config_id)
-                .fetch_optional(pool)
-                .await
-                .map_err(|e| e.to_string())?;
+                let routed = sqlx::query_as::<_, AiConfig>("SELECT * FROM ai_configs WHERE id = ?")
+                    .bind(&config_id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
 
                 if let Some(cfg) = routed {
                     return Ok(cfg);
@@ -178,13 +180,11 @@ pub async fn resolve_ai_config(pool: &sqlx::SqlitePool, module: Option<&str>) ->
     }
 
     // Step 2: 回退到第一个激活的配置
-    sqlx::query_as::<_, AiConfig>(
-        "SELECT * FROM ai_configs WHERE is_active = 1 LIMIT 1"
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| "未配置激活的 AI 模型，请先在设置中配置".to_string())
+    sqlx::query_as::<_, AiConfig>("SELECT * FROM ai_configs WHERE is_active = 1 LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "未配置激活的 AI 模型，请先在设置中配置".to_string())
 }
 
 #[tauri::command]
@@ -193,7 +193,8 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
     let active_config = resolve_ai_config(&*pool, req.module.as_deref()).await?;
 
     // 确定使用的模型：优先使用前端传来的覆盖参数，否则使用配置中的模型名
-    let mut model_name = req.model_override
+    let mut model_name = req
+        .model_override
         .clone()
         .unwrap_or(active_config.model_name.clone());
 
@@ -227,12 +228,12 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         .build()
         .map_err(|e| format!("无法构建 HTTP 客户端: {}", e))?;
 
-
     let is_gemini = url.contains("googleapis.com");
     let api_key = resolve_local_bearer_token(
         active_config.api_key.unwrap_or_default().trim().to_string(),
-        is_local
-    ).await;
+        is_local,
+    )
+    .await;
     // 智能模型对齐：随动模式 (针对 LM Studio / Ollama 等无固定模型名或动态载入的情况)
     // 触发条件：模型名为 __auto_detect__ 或者为空，且不是 Gemini
     if (model_name == "__auto_detect__" || model_name.is_empty()) && !is_gemini {
@@ -241,13 +242,17 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         if !api_key.is_empty() {
             models_req = models_req.header("Authorization", format!("Bearer {}", api_key));
         }
-        
+
         if let Ok(resp) = models_req.send().await {
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
                     // OpenAI 兼容格式通常在 data 数组中，Ollama 也有类似结构
                     if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
-                        if let Some(first_model) = data.get(0).and_then(|m| m.get("id")).and_then(|i| i.as_str()) {
+                        if let Some(first_model) = data
+                            .get(0)
+                            .and_then(|m| m.get("id"))
+                            .and_then(|i| i.as_str())
+                        {
                             model_name = first_model.to_string();
                             println!("AI 智能对齐：自动检测到可用模型: {}", model_name);
                         }
@@ -261,7 +266,7 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
             }
         }
     }
-    
+
     // 兜底逻辑：如果仍然为空，对于本地模型给一个通用默认值，避免请求失败
     if model_name.is_empty() || model_name == "__auto_detect__" {
         if is_local {
@@ -346,7 +351,11 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         // 重新获取原始 images 进行 Gemini 处理 (Gemini 支持 PDF)
         if let Some(orig_imgs) = &req.images {
             for img in orig_imgs {
-                let mime_type = if img.starts_with("JVBERi") { "application/pdf" } else { "image/jpeg" };
+                let mime_type = if img.starts_with("JVBERi") {
+                    "application/pdf"
+                } else {
+                    "image/jpeg"
+                };
                 parts.push(json!({
                     "inline_data": {
                         "mime_type": mime_type,
@@ -413,8 +422,11 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let raw_text = resp.text().await.unwrap_or_else(|_| "无法读取错误响应体".to_string());
-        
+        let raw_text = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "无法读取错误响应体".to_string());
+
         // 尝试从 JSON 中提取错误，如果不行就直接返回 raw_text
         let err_msg = if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&raw_text) {
             err_json["error"]["message"]
@@ -472,12 +484,11 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
         .build()
         .map_err(|e| format!("无法构建 HTTP 客户端: {}", e))?;
 
-    let mut model_name = req
-        .model_override
-        .clone()
-        .unwrap_or(cfg.model_name.clone());
+    let mut model_name = req.model_override.clone().unwrap_or(cfg.model_name.clone());
 
-    let api_key = resolve_local_bearer_token(cfg.api_key.unwrap_or_default().trim().to_string(), is_local).await;
+    let api_key =
+        resolve_local_bearer_token(cfg.api_key.unwrap_or_default().trim().to_string(), is_local)
+            .await;
 
     // 沿用与 chat_with_ai 相同的自动模型探测/兜底策略
     if (model_name == "__auto_detect__" || model_name.is_empty()) && !is_gemini {
@@ -490,7 +501,11 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
             if resp.status().is_success() {
                 if let Ok(json) = resp.json::<serde_json::Value>().await {
                     if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
-                        if let Some(first_model) = data.get(0).and_then(|m| m.get("id")).and_then(|i| i.as_str()) {
+                        if let Some(first_model) = data
+                            .get(0)
+                            .and_then(|m| m.get("id"))
+                            .and_then(|i| i.as_str())
+                        {
                             model_name = first_model.to_string();
                         }
                     } else if let Some(m_list) = json.as_array() {
@@ -560,13 +575,18 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
         let mut contents = vec![];
         if let Some(sys) = req.system_prompt {
             contents.push(json!({"role": "user", "parts": [{"text": sys}]}));
-            contents.push(json!({"role": "model", "parts": [{"text": "理解，我将按此要求执行。"}]}));
+            contents
+                .push(json!({"role": "model", "parts": [{"text": "理解，我将按此要求执行。"}]}));
         }
 
         let mut parts = vec![json!({"text": final_prompt})];
         if let Some(orig_imgs) = &req.images {
             for img in orig_imgs {
-                let mime_type = if img.starts_with("JVBERi") { "application/pdf" } else { "image/jpeg" };
+                let mime_type = if img.starts_with("JVBERi") {
+                    "application/pdf"
+                } else {
+                    "image/jpeg"
+                };
                 parts.push(json!({
                     "inline_data": {
                         "mime_type": mime_type,
@@ -623,7 +643,10 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let raw_text = resp.text().await.unwrap_or_else(|_| "无法读取错误响应体".to_string());
+        let raw_text = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "无法读取错误响应体".to_string());
         let err_msg = if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&raw_text) {
             err_json["error"]["message"]
                 .as_str()
@@ -652,11 +675,41 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
 pub async fn fetch_public_free_apis() -> Result<Vec<AiConfig>, String> {
     // 真实扫网：逐一探测已知的免费/社区 API 端点，只返回真正可连通的节点
     let candidates = vec![
-        ("硅基流动 (免费额度)", "openai", "https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-72B-Instruct", ""),
-        ("DeepSeek 官方", "openai", "https://api.deepseek.com/v1", "deepseek-chat", ""),
-        ("Groq 免费层", "openai", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", ""),
-        ("OpenRouter 免费", "openai", "https://openrouter.ai/api/v1", "meta-llama/llama-3-8b-instruct:free", ""),
-        ("Cerebras 免费推理", "openai", "https://api.cerebras.ai/v1", "llama3.1-8b", ""),
+        (
+            "硅基流动 (免费额度)",
+            "openai",
+            "https://api.siliconflow.cn/v1",
+            "Qwen/Qwen2.5-72B-Instruct",
+            "",
+        ),
+        (
+            "DeepSeek 官方",
+            "openai",
+            "https://api.deepseek.com/v1",
+            "deepseek-chat",
+            "",
+        ),
+        (
+            "Groq 免费层",
+            "openai",
+            "https://api.groq.com/openai/v1",
+            "llama-3.3-70b-versatile",
+            "",
+        ),
+        (
+            "OpenRouter 免费",
+            "openai",
+            "https://openrouter.ai/api/v1",
+            "meta-llama/llama-3-8b-instruct:free",
+            "",
+        ),
+        (
+            "Cerebras 免费推理",
+            "openai",
+            "https://api.cerebras.ai/v1",
+            "llama3.1-8b",
+            "",
+        ),
     ];
 
     let client = reqwest::Client::builder()
@@ -704,9 +757,12 @@ pub async fn fetch_public_free_apis() -> Result<Vec<AiConfig>, String> {
 }
 
 #[tauri::command]
-pub async fn fetch_ai_models(base_url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
+pub async fn fetch_ai_models(
+    base_url: String,
+    api_key: Option<String>,
+) -> Result<Vec<String>, String> {
     let client = reqwest::Client::builder()
-        .no_proxy() 
+        .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -719,13 +775,19 @@ pub async fn fetch_ai_models(base_url: String, api_key: Option<String>) -> Resul
         }
     }
 
-    let response = request.send().await.map_err(|e| format!("请求失败: {}", e))?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("服务器返回错误: {}", response.status()));
     }
 
-    let json: serde_json::Value = response.json().await.map_err(|e| format!("解析失败: {}", e))?;
-    
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析失败: {}", e))?;
+
     let mut models = vec![];
     if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
         for m in data {

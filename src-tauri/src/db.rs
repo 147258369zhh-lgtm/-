@@ -226,9 +226,11 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<DbPool, Box<dyn std::erro
 
     // RAG: Knowledge Base chunks with embeddings
     // Drop old table with FK constraint and recreate without it
-    let _ = sqlx::query("DROP TABLE IF EXISTS kb_chunks_old").execute(&pool).await;
+    let _ = sqlx::query("DROP TABLE IF EXISTS kb_chunks_old")
+        .execute(&pool)
+        .await;
     let has_fk: bool = sqlx::query_scalar::<_, String>(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='kb_chunks'"
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='kb_chunks'",
     )
     .fetch_optional(&pool)
     .await
@@ -238,7 +240,9 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<DbPool, Box<dyn std::erro
 
     if has_fk {
         // Migrate: rename old table, create new, copy data, drop old
-        let _ = sqlx::query("ALTER TABLE kb_chunks RENAME TO kb_chunks_old").execute(&pool).await;
+        let _ = sqlx::query("ALTER TABLE kb_chunks RENAME TO kb_chunks_old")
+            .execute(&pool)
+            .await;
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS kb_chunks (
                 id TEXT PRIMARY KEY,
@@ -250,8 +254,12 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<DbPool, Box<dyn std::erro
         )
         .execute(&pool)
         .await?;
-        let _ = sqlx::query("INSERT INTO kb_chunks SELECT * FROM kb_chunks_old").execute(&pool).await;
-        let _ = sqlx::query("DROP TABLE IF EXISTS kb_chunks_old").execute(&pool).await;
+        let _ = sqlx::query("INSERT INTO kb_chunks SELECT * FROM kb_chunks_old")
+            .execute(&pool)
+            .await;
+        let _ = sqlx::query("DROP TABLE IF EXISTS kb_chunks_old")
+            .execute(&pool)
+            .await;
     } else {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS kb_chunks (
@@ -268,6 +276,77 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<DbPool, Box<dyn std::erro
 
     // Default embedding engine setting
     sqlx::query("INSERT OR IGNORE INTO settings (key, value, remarks) VALUES ('embedding_engine', 'local', '嵌入引擎: local/lmstudio/online')")
+        .execute(&pool)
+        .await?;
+
+    // Performance indexes on frequently queried foreign key columns
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_files_project_id ON files(project_id)")
+        .execute(&pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_kb_chunks_template_id ON kb_chunks(template_id)")
+        .execute(&pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_automation_instructions_scheme_id ON automation_instructions(scheme_id)")
+        .execute(&pool)
+        .await?;
+
+    // ═══════════════════════════════════════════════
+    // Agent System Tables
+    // ═══════════════════════════════════════════════
+
+    // Agent tasks: persistent goal tracking
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS agent_tasks (
+            id TEXT PRIMARY KEY,
+            goal TEXT NOT NULL,
+            status TEXT DEFAULT 'running',
+            plan TEXT,
+            current_step INTEGER DEFAULT 0,
+            total_steps INTEGER DEFAULT 0,
+            model_config_id TEXT,
+            project_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            final_result TEXT
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    // Agent short-term memory: conversation history per task
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS agent_memory (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            round INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT,
+            tool_call_id TEXT,
+            tool_name TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    // Agent working memory: key-value state snapshots
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS agent_working_memory (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    // Indexes for agent tables
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_agent_memory_task_id ON agent_memory(task_id)")
+        .execute(&pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_agent_working_memory_task_id ON agent_working_memory(task_id)")
         .execute(&pool)
         .await?;
 

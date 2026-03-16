@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { invoke } from '@tauri-apps/api/core';
 import { SchemeEditor } from './SchemeEditor';
@@ -8,6 +8,10 @@ import {
 } from 'lucide-react';
 import { ProjectDetails } from './ProjectDetails';
 import { FileAutomationEngine } from '../utils/FileAutomationEngine';
+import { readFile } from '@tauri-apps/plugin-fs';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+import ExcelJS from 'exceljs';
 
 const inp: React.CSSProperties = {
     width: '100%', padding: '12px 16px',
@@ -52,13 +56,13 @@ export const ProjectWorkspace: React.FC = () => {
         } catch (error) { console.error(error); }
     };
 
-    const fileCategoryOptions = ['全部', ...Array.from(new Set(files.map(f => f.category || '未分类')))].filter(Boolean);
-    const filteredFiles = files.filter(file => {
+    const fileCategoryOptions = useMemo(() => ['全部', ...Array.from(new Set(files.map(f => f.category || '未分类')))].filter(Boolean), [files]);
+    const filteredFiles = useMemo(() => files.filter(file => {
         const matchText = `${file.name} ${file.ai_summary || ''}`.toLowerCase();
         const searchMatch = matchText.includes(fileSearch.toLowerCase());
         const categoryMatch = fileCategoryFilter === '全部' || (file.category || '未分类') === fileCategoryFilter;
         return searchMatch && categoryMatch;
-    });
+    }), [files, fileSearch, fileCategoryFilter]);
 
     const fetchSurvey = async () => {
         if (!activeProject) return;
@@ -138,9 +142,6 @@ export const ProjectWorkspace: React.FC = () => {
     };
 
     const extractTextFromDocx = async (path: string) => {
-        const { readFile } = await import('@tauri-apps/plugin-fs');
-        const { default: PizZip } = await import('pizzip');
-        const { default: Docxtemplater } = await import('docxtemplater');
         const data = await readFile(path);
         const zip = new PizZip(data);
         const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
@@ -149,8 +150,6 @@ export const ProjectWorkspace: React.FC = () => {
     };
 
     const extractTextFromXlsx = async (path: string) => {
-        const { readFile } = await import('@tauri-apps/plugin-fs');
-        const ExcelJS = (await import('exceljs')).default;
         const data = await readFile(path);
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(data as any);
@@ -170,7 +169,6 @@ export const ProjectWorkspace: React.FC = () => {
     };
 
     const extractTextFromFile = async (path: string) => {
-        const { readFile } = await import('@tauri-apps/plugin-fs');
         const lower = path.toLowerCase();
         if (lower.endsWith('.docx')) return extractTextFromDocx(path);
         if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return extractTextFromXlsx(path);
