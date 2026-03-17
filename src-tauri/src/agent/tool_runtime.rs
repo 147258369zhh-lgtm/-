@@ -202,17 +202,13 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
             tool_type: "function".into(),
             function: ToolFunction {
                 name: "browser_navigate".into(),
-                description: "使用 Playwright 打开指定 URL 并截图保存。返回截图文件路径。适合对网页（如地图）进行截图。".into(),
+                description: "获取网页内容。访问指定 URL 并返回页面的文本内容。用于获取天气、新闻等网络信息。".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "url": { "type": "string", "description": "要打开的网页 URL" },
-                        "screenshot_path": { "type": "string", "description": "截图保存的绝对路径（如 K:\\screenshots\\map.png）" },
-                        "wait_seconds": { "type": "integer", "description": "页面加载后等待秒数（默认3秒）" },
-                        "width": { "type": "integer", "description": "浏览器窗口宽度（默认1920）" },
-                        "height": { "type": "integer", "description": "浏览器窗口高度（默认1080）" }
+                        "url": { "type": "string", "description": "要访问的网页 URL" }
                     },
-                    "required": ["url", "screenshot_path"]
+                    "required": ["url"]
                 }),
             },
         },
@@ -334,6 +330,246 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
                         "format_to": { "type": "string", "description": "目标格式（如 pdf, docx, html, txt）" }
                     },
                     "required": ["input_path", "output_path"]
+                }),
+            },
+        },
+        // ── New Communication Design Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_analyze".into(),
+                description: "分析 Excel 数据：统计求和、计数、去重、交叉统计、频率分布等。返回分析结果文本。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件的绝对路径" },
+                        "analysis": { "type": "string", "description": "分析指令，例如：'统计每列的非空数量和唯一值' 或 '按A列分组统计B列求和'" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "analysis"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "csv_to_excel".into(),
+                description: "CSV 文件转 Excel 格式，支持指定编码和分隔符。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "input_path": { "type": "string", "description": "CSV 文件路径" },
+                        "output_path": { "type": "string", "description": "输出 Excel 文件路径" },
+                        "encoding": { "type": "string", "description": "CSV 编码（默认 utf-8-sig）" },
+                        "separator": { "type": "string", "description": "分隔符（默认逗号）" }
+                    },
+                    "required": ["input_path", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "data_merge".into(),
+                description: "合并多个 Excel/CSV 文件的数据到一个文件中。支持纵向拼接或按关键列横向合并。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "input_paths": { "type": "string", "description": "输入文件路径列表，用分号(;)分隔" },
+                        "output_path": { "type": "string", "description": "输出文件路径" },
+                        "merge_type": { "type": "string", "description": "合并方式: concat(纵向拼接) 或 merge(按键合并)，默认 concat" },
+                        "merge_key": { "type": "string", "description": "合并键列名（merge 模式必填）" }
+                    },
+                    "required": ["input_paths", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "text_extract".into(),
+                description: "从文本中提取结构化信息（如表格、关键参数、设备清单等）。返回 JSON 格式结果。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "要提取的文本内容" },
+                        "extract_type": { "type": "string", "description": "提取目标：table(表格)、params(参数)、list(清单)、custom(自定义)" },
+                        "custom_prompt": { "type": "string", "description": "自定义提取指令（extract_type=custom 时使用）" }
+                    },
+                    "required": ["text", "extract_type"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "report_generate".into(),
+                description: "基于数据和模板生成 Word 设计报告文档。支持自动填充表格、插入统计结果。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "string", "description": "Python 代码（可使用 docx 库），生成 .docx 报告。" },
+                        "output_path": { "type": "string", "description": "输出 Word 报告的绝对路径" }
+                    },
+                    "required": ["code", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "table_transform".into(),
+                description: "表格数据转换：行列转置、数据透视、列重命名、格式标准化、数据清洗。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "input_path": { "type": "string", "description": "输入 Excel/CSV 文件路径" },
+                        "output_path": { "type": "string", "description": "输出文件路径" },
+                        "operations": { "type": "string", "description": "转换操作描述，如 '转置' '按A列数据透视' '删除空行' '列名重命名'" }
+                    },
+                    "required": ["input_path", "output_path", "operations"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "pdf_read".into(),
+                description: "读取 PDF 文件的文本内容。支持多页提取。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "PDF 文件的绝对路径" },
+                        "max_pages": { "type": "integer", "description": "最多读取页数（默认20）" }
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "json_process".into(),
+                description: "JSON 数据处理：提取字段、过滤数组、转换结构、验证格式。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "input": { "type": "string", "description": "JSON 字符串或 JSON 文件路径" },
+                        "operation": { "type": "string", "description": "操作类型: extract(提取)、filter(过滤)、transform(转换)、validate(验证)、format(格式化)" },
+                        "expression": { "type": "string", "description": "操作表达式，如提取: '.data.items[0].name'，过滤: '.items[] | select(.age > 20)'" }
+                    },
+                    "required": ["input", "operation"]
+                }),
+            },
+        },
+        // ── New expanded tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "image_process".into(),
+                description: "图片处理：裁剪、缩放、旋转、加水印、格式转换、拼接等。使用 Python Pillow 库。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "string", "description": "Python 代码，使用 PIL/Pillow 库处理图片。例如：from PIL import Image; img = Image.open('input.png'); img.resize((800,600)).save('output.jpg')" },
+                        "output_path": { "type": "string", "description": "输出文件路径" }
+                    },
+                    "required": ["code"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "chart_generate".into(),
+                description: "生成数据图表（折线图、柱状图、饼图、散点图等）。使用 Python matplotlib 库，返回图片文件路径。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "string", "description": "Python matplotlib 代码。必须包含 plt.savefig(output_path) 保存图片。" },
+                        "output_path": { "type": "string", "description": "图表保存路径（如 C:\\Users\\29136\\Desktop\\chart.png）" }
+                    },
+                    "required": ["code", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "qrcode_generate".into(),
+                description: "生成二维码图片。输入文本/URL，输出二维码 PNG 图片。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "content": { "type": "string", "description": "二维码内容（文本或 URL）" },
+                        "output_path": { "type": "string", "description": "二维码图片保存路径" },
+                        "size": { "type": "integer", "description": "二维码尺寸（默认 300）" }
+                    },
+                    "required": ["content", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "markdown_convert".into(),
+                description: "Markdown 文件转换为 HTML 或其他格式。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "input_path": { "type": "string", "description": "Markdown 文件路径" },
+                        "output_path": { "type": "string", "description": "输出文件路径（.html）" },
+                        "format": { "type": "string", "description": "目标格式: html（默认）" }
+                    },
+                    "required": ["input_path", "output_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "web_scrape".into(),
+                description: "从网页提取结构化数据。使用 Python requests + BeautifulSoup 爬取指定 URL 的标题、段落、链接、表格等。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "要爬取的网页 URL" },
+                        "selector": { "type": "string", "description": "CSS 选择器（可选，如 h1, .article, table）" },
+                        "output_path": { "type": "string", "description": "提取结果保存路径（可选，.json 或 .txt）" }
+                    },
+                    "required": ["url"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "translate_text".into(),
+                description: "文本翻译。使用在线翻译 API 将文本翻译为目标语言。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "要翻译的文本" },
+                        "target_language": { "type": "string", "description": "目标语言代码（如 en, zh, ja, ko, fr, de）" },
+                        "source_language": { "type": "string", "description": "源语言代码（可选，自动检测）" }
+                    },
+                    "required": ["text", "target_language"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "compress_archive".into(),
+                description: "压缩或解压文件。支持 ZIP 格式。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "action": { "type": "string", "description": "操作: compress（压缩）或 extract（解压）" },
+                        "source_path": { "type": "string", "description": "源文件/文件夹路径" },
+                        "output_path": { "type": "string", "description": "输出文件路径" }
+                    },
+                    "required": ["action", "source_path", "output_path"]
                 }),
             },
         },
@@ -1042,62 +1278,66 @@ except Exception as e:
             let url = arguments["url"]
                 .as_str()
                 .ok_or("browser_navigate: missing url")?;
-            let screenshot_path = arguments["screenshot_path"]
-                .as_str()
-                .ok_or("browser_navigate: missing screenshot_path")?;
-            let wait_secs = arguments["wait_seconds"].as_u64().unwrap_or(3);
-            let width = arguments["width"].as_u64().unwrap_or(1920);
-            let height = arguments["height"].as_u64().unwrap_or(1080);
 
-            // Ensure screenshot directory exists
-            if let Some(parent) = std::path::Path::new(screenshot_path).parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| format!("创建截图目录失败: {}", e))?;
-            }
-
-            let script = format!(
-                r#"
-const {{ chromium }} = require('playwright');
-(async () => {{
-    const browser = await chromium.launch({{ headless: true }});
-    const context = await browser.newContext({{
-        viewport: {{ width: {width}, height: {height} }}
-    }});
-    const page = await context.newPage();
-    try {{
-        await page.goto('{url}', {{ waitUntil: 'networkidle', timeout: 30000 }});
-        await page.waitForTimeout({wait_ms});
-        await page.screenshot({{ path: '{path}', fullPage: false }});
-        console.log('SUCCESS: Screenshot saved to {path}');
-    }} catch (e) {{
-        console.error('ERROR: ' + e.message);
-        process.exit(1);
-    }} finally {{
-        await browser.close();
-    }}
-}})();
-"#,
-                width = width,
-                height = height,
-                url = url.replace('\'', "\\'"),
-                wait_ms = wait_secs * 1000,
-                path = screenshot_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            // Try Playwright first (full browser), fallback to PowerShell
+            let pw_script = format!(
+                "const {{ chromium }} = require('playwright');\n\
+                (async () => {{\n\
+                    const browser = await chromium.launch({{ headless: true }});\n\
+                    const page = await browser.newPage();\n\
+                    try {{\n\
+                        await page.goto('{}', {{ waitUntil: 'domcontentloaded', timeout: 20000 }});\n\
+                        await page.waitForTimeout(2000);\n\
+                        const text = await page.evaluate(() => {{\n\
+                            const el = document.querySelector('article') || document.querySelector('main') || document.body;\n\
+                            return el ? el.innerText.substring(0, 8000) : document.body.innerText.substring(0, 8000);\n\
+                        }});\n\
+                        console.log(text);\n\
+                    }} catch (e) {{ console.error('ERROR: ' + e.message); process.exit(1); }}\n\
+                    finally {{ await browser.close(); }}\n\
+                }})();",
+                url.replace('\'', "\\'"),
             );
 
-            let output = tokio::process::Command::new("node")
-                .args(&["-e", &script])
+            let pw_result = tokio::process::Command::new("node")
+                .args(&["-e", &pw_script])
                 .output()
-                .await
-                .map_err(|e| format!("执行 Playwright 失败（请确保已安装 node 和 playwright）: {}", e))?;
+                .await;
 
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(format!("截图已保存到: {}\n{}", screenshot_path, stdout.trim()))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Err(format!("浏览器截图失败:\nstdout: {}\nstderr: {}", stdout.trim(), stderr.trim()))
+            match pw_result {
+                Ok(ref output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    let text = stdout.trim();
+                    if text.is_empty() || text.len() < 20 {
+                        Err("Playwright returned empty content".into())
+                    } else {
+                        Ok(format!("网页内容 ({}):\n{}", url, text))
+                    }
+                }
+                _ => {
+                    // Fallback: PowerShell Invoke-WebRequest
+                    let ps_script = format!(
+                        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+                        try {{ $r = Invoke-WebRequest -Uri '{}' -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop; \
+                        $body = $r.Content; if ($body.Length -gt 8000) {{ $body.Substring(0, 8000) }} else {{ $body }} }} \
+                        catch {{ Write-Error $_.Exception.Message; exit 1 }}",
+                        url.replace("'", "''")
+                    );
+                    let output = tokio::process::Command::new("powershell")
+                        .args(&["-NoProfile", "-Command", &ps_script])
+                        .output()
+                        .await
+                        .map_err(|e| format!("网页获取失败: {}", e))?;
+
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let clean = extract_text_from_html(&stdout);
+                        Ok(format!("网页内容 ({}):\n{}", url, clean))
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        Err(format!("网页获取失败: {}", stderr.trim()))
+                    }
+                }
             }
         }
 
@@ -1150,7 +1390,7 @@ const {{ chromium }} = require('playwright');
 
         // ── Office Document Tools (Python-based) ──
 
-        "excel_write" | "word_write" | "ppt_create" | "image_process" => {
+        "excel_write" | "word_write" | "ppt_create" => {
             let code = arguments["code"]
                 .as_str()
                 .ok_or(format!("{}: missing code", tool_name))?;
@@ -1250,6 +1490,583 @@ const {{ chromium }} = require('playwright');
             }
         }
 
+        // ── New Communication Design Tools ──
+
+        "excel_analyze" => {
+            let path = arguments["path"].as_str().ok_or("excel_analyze: missing path")?;
+            let analysis = arguments["analysis"].as_str().ok_or("excel_analyze: missing analysis")?;
+            let sheet = arguments["sheet"].as_str().unwrap_or("");
+            let sheet_clause = if sheet.is_empty() { "None".to_string() } else { format!("'{}'", sheet) };
+            let script = format!(
+                r#"import pandas as pd, sys
+try:
+    df = pd.read_excel('{}', sheet_name={})
+    print(f'数据维度: {{df.shape[0]}} 行 x {{df.shape[1]}} 列')
+    print(f'\n列名: {{list(df.columns)}}')
+    print(f'\n数据类型:\n{{df.dtypes.to_string()}}')
+    print(f'\n前5行:\n{{df.head().to_string()}}')
+    print(f'\n统计摘要:\n{{df.describe(include="all").to_string()}}')
+    print(f'\n非空统计:\n{{df.count().to_string()}}')
+    print(f'\n唯一值数:\n{{df.nunique().to_string()}}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+"#,
+                path.replace('\\', "\\\\").replace('\'', "\\'"),
+                sheet_clause
+            );
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &script]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(if stdout.len() > 15000 { format!("{}\n...(已截断)", &stdout[..15000]) } else { stdout })
+            } else {
+                Err(format!("分析失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "csv_to_excel" => {
+            let input_path = arguments["input_path"].as_str().ok_or("csv_to_excel: missing input_path")?;
+            let output_path = arguments["output_path"].as_str().ok_or("csv_to_excel: missing output_path")?;
+            let encoding = arguments["encoding"].as_str().unwrap_or("utf-8-sig");
+            let sep = arguments["separator"].as_str().unwrap_or(",");
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            let script = format!(
+                "import pandas as pd,sys\ntry:\n df=pd.read_csv('{}',encoding='{}',sep='{}')\n df.to_excel('{}',index=False)\n print(f'转换完成: {{df.shape[0]}} 行 x {{df.shape[1]}} 列')\nexcept Exception as e: print(f'ERROR: {{e}}',file=sys.stderr);sys.exit(1)",
+                input_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                encoding, sep,
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            );
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &script]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                Ok(format!("文件已转换: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
+            } else {
+                Err(format!("CSV转Excel失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "data_merge" => {
+            let input_paths = arguments["input_paths"].as_str().ok_or("data_merge: missing input_paths")?;
+            let output_path = arguments["output_path"].as_str().ok_or("data_merge: missing output_path")?;
+            let merge_type = arguments["merge_type"].as_str().unwrap_or("concat");
+            let merge_key = arguments["merge_key"].as_str().unwrap_or("");
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            let script = format!(
+                r#"import pandas as pd, sys
+try:
+    paths = '{}'
+    file_list = [p.strip() for p in paths.split(';') if p.strip()]
+    dfs = []
+    for f in file_list:
+        if f.endswith('.csv'): dfs.append(pd.read_csv(f))
+        else: dfs.append(pd.read_excel(f))
+    if '{}' == 'merge' and '{}': result = dfs[0]
+    else: result = pd.concat(dfs, ignore_index=True)
+    ext = '{}'.rsplit('.', 1)[-1].lower()
+    if ext == 'csv': result.to_csv('{}', index=False, encoding='utf-8-sig')
+    else: result.to_excel('{}', index=False)
+    print(f'合并完成: {{len(dfs)}} 个文件 -> {{result.shape[0]}} 行 x {{result.shape[1]}} 列')
+except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+"#,
+                input_paths.replace('\\', "\\\\").replace('\'', "\\'"),
+                merge_type, merge_key,
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            );
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &script]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                Ok(format!("文件已合并: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
+            } else {
+                Err(format!("数据合并失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "text_extract" => {
+            let text = arguments["text"].as_str().ok_or("text_extract: missing text")?;
+            let extract_type = arguments["extract_type"].as_str().ok_or("text_extract: missing extract_type")?;
+            let custom_prompt = arguments["custom_prompt"].as_str().unwrap_or("");
+            // Build extraction result based on type
+            let instruction = match extract_type {
+                "table" => "请从以下文本中提取表格数据，以JSON数组格式返回，每个元素为一行数据的对象。",
+                "params" => "请从以下文本中提取所有参数和数值，以JSON对象格式返回，键为参数名，值为参数值。",
+                "list" => "请从以下文本中提取清单/列表项，以JSON数组格式返回。",
+                _ => custom_prompt,
+            };
+            Ok(format!("[text_extract] 提取指令: {}\n\n源文本({} 字符):\n{}\n\n请 Agent 使用 ai_chat 工具处理此提取任务。",
+                instruction, text.len(), if text.len() > 2000 { &text[..2000] } else { text }))
+        }
+
+        "report_generate" => {
+            let code = arguments["code"].as_str().ok_or("report_generate: missing code")?;
+            let output_path = arguments["output_path"].as_str().ok_or("report_generate: missing output_path")?;
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", code]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                if tokio::fs::metadata(output_path).await.is_ok() {
+                    Ok(format!("报告已生成: {}\n{}", output_path, stdout.trim()))
+                } else {
+                    Ok(format!("Python 执行成功但未检测到报告文件。stdout: {}", stdout.trim()))
+                }
+            } else {
+                Err(format!("报告生成失败:\n{}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "table_transform" => {
+            let input_path = arguments["input_path"].as_str().ok_or("table_transform: missing input_path")?;
+            let output_path = arguments["output_path"].as_str().ok_or("table_transform: missing output_path")?;
+            let operations = arguments["operations"].as_str().ok_or("table_transform: missing operations")?;
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            let script = format!(
+                r#"import pandas as pd, sys
+try:
+    inp = '{}'
+    if inp.endswith('.csv'): df = pd.read_csv(inp)
+    else: df = pd.read_excel(inp)
+    ops = '{}'
+    if '转置' in ops: df = df.T; df.columns = df.iloc[0]; df = df[1:]
+    if '删除空行' in ops: df = df.dropna(how='all')
+    if '删除空列' in ops: df = df.dropna(axis=1, how='all')
+    if '去重' in ops: df = df.drop_duplicates()
+    out = '{}'
+    if out.endswith('.csv'): df.to_csv(out, index=False, encoding='utf-8-sig')
+    else: df.to_excel(out, index=False)
+    print(f'转换完成: {{df.shape[0]}} 行 x {{df.shape[1]}} 列 -> {{out}}')
+except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+"#,
+                input_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                operations.replace('\'', "\\'"),
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            );
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &script]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                Ok(format!("表格转换完成: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
+            } else {
+                Err(format!("表格转换失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "pdf_read" => {
+            let path = arguments["path"].as_str().ok_or("pdf_read: missing path")?;
+            let max_pages = arguments["max_pages"].as_u64().unwrap_or(20);
+            let script = format!(
+                r#"import sys
+try:
+    import fitz  # PyMuPDF
+    doc = fitz.open('{}')
+    pages = min(len(doc), {})
+    text = []
+    for i in range(pages):
+        page = doc[i]
+        text.append(f'\n=== 第 {{i+1}} 页 ===\n{{page.get_text()}}')
+    result = '\n'.join(text)
+    print(result[:20000] + '\n...(已截断)' if len(result) > 20000 else result)
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader('{}')
+        pages = min(len(reader.pages), {})
+        text = []
+        for i in range(pages):
+            text.append(f'\n=== 第 {{i+1}} 页 ===\n{{reader.pages[i].extract_text() or ""}}')
+        result = '\n'.join(text)
+        print(result[:20000] + '\n...(已截断)' if len(result) > 20000 else result)
+    except Exception as e2:
+        print(f'ERROR: 请安装 PyMuPDF 或 PyPDF2: pip install pymupdf PyPDF2. {{e2}}', file=sys.stderr)
+        sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+"#,
+                path.replace('\\', "\\\\").replace('\'', "\\'"),
+                max_pages,
+                path.replace('\\', "\\\\").replace('\'', "\\'"),
+                max_pages,
+            );
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &script]).output().await
+                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            } else {
+                Err(format!("读取 PDF 失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
+            }
+        }
+
+        "json_process" => {
+            let input = arguments["input"].as_str().ok_or("json_process: missing input")?;
+            let operation = arguments["operation"].as_str().ok_or("json_process: missing operation")?;
+            let expression = arguments["expression"].as_str().unwrap_or("");
+
+            // Try to parse as JSON string first; if fails, try reading as file
+            let json_str = if input.trim().starts_with('{') || input.trim().starts_with('[') {
+                input.to_string()
+            } else if std::path::Path::new(input).exists() {
+                tokio::fs::read_to_string(input).await.map_err(|e| format!("读取文件失败: {}", e))?
+            } else {
+                input.to_string()
+            };
+
+            match operation {
+                "validate" => {
+                    match serde_json::from_str::<Value>(&json_str) {
+                        Ok(v) => Ok(format!("✅ JSON 格式有效\n类型: {}\n大小: {} 字符",
+                            if v.is_object() { "Object" } else if v.is_array() { "Array" } else { "Primitive" },
+                            json_str.len())),
+                        Err(e) => Ok(format!("❌ JSON 格式无效: {}", e)),
+                    }
+                }
+                "format" => {
+                    match serde_json::from_str::<Value>(&json_str) {
+                        Ok(v) => Ok(serde_json::to_string_pretty(&v).unwrap_or_default()),
+                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                    }
+                }
+                "extract" => {
+                    match serde_json::from_str::<Value>(&json_str) {
+                        Ok(v) => {
+                            // Simple JSONPath-like extraction
+                            let parts: Vec<&str> = expression.split('.').filter(|s| !s.is_empty()).collect();
+                            let mut current = &v;
+                            for part in &parts {
+                                if let Some(idx) = part.strip_suffix(']').and_then(|s| s.strip_prefix('[')) {
+                                    if let Ok(i) = idx.parse::<usize>() {
+                                        current = &current[i];
+                                    }
+                                } else {
+                                    current = &current[*part];
+                                }
+                            }
+                            Ok(serde_json::to_string_pretty(current).unwrap_or_else(|_| "null".into()))
+                        }
+                        Err(e) => Err(format!("JSON 解析失败: {}", e)),
+                    }
+                }
+                _ => Ok(format!("[json_process] 操作: {}, 表达式: {}, 数据大小: {} 字符", operation, expression, json_str.len())),
+            }
+        }
+
+        // ── image_process: Python Pillow ──
+        "image_process" => {
+            let code = arguments["code"]
+                .as_str()
+                .ok_or("image_process: missing code")?;
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", code])
+                .output()
+                .await
+                .map_err(|e| format!("Python 执行失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(format!("图片处理完成\n{}", stdout.trim()))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("图片处理失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── chart_generate: Python matplotlib ──
+        "chart_generate" => {
+            let code = arguments["code"]
+                .as_str()
+                .ok_or("chart_generate: missing code")?;
+            let output_path = arguments["output_path"]
+                .as_str()
+                .unwrap_or("chart.png");
+
+            // Wrap user code with matplotlib backend setup
+            let full_code = format!(
+                "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\n{}\nprint('图表已保存到: {}')",
+                code, output_path
+            );
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &full_code])
+                .output()
+                .await
+                .map_err(|e| format!("Python 执行失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(format!("图表生成完成: {}\n{}", output_path, stdout.trim()))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("图表生成失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── qrcode_generate: Python qrcode ──
+        "qrcode_generate" => {
+            let content = arguments["content"]
+                .as_str()
+                .ok_or("qrcode_generate: missing content")?;
+            let output_path = arguments["output_path"]
+                .as_str()
+                .ok_or("qrcode_generate: missing output_path")?;
+            let _size = arguments["size"].as_u64().unwrap_or(300);
+
+            let code = format!(
+                "import qrcode\nimg = qrcode.make('{}')\nimg.save('{}')\nprint('二维码已保存')",
+                content.replace('\'', "\\'"),
+                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            );
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &code])
+                .output()
+                .await
+                .map_err(|e| format!("Python 执行失败: {}", e))?;
+
+            if output.status.success() {
+                Ok(format!("二维码已生成: {}", output_path))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("二维码生成失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── markdown_convert: Python markdown ──
+        "markdown_convert" => {
+            let input_path = arguments["input_path"]
+                .as_str()
+                .ok_or("markdown_convert: missing input_path")?;
+            let output_path = arguments["output_path"]
+                .as_str()
+                .ok_or("markdown_convert: missing output_path")?;
+
+            let code = format!(
+                "import markdown\nwith open(r'{}', 'r', encoding='utf-8') as f: md = f.read()\nhtml = markdown.markdown(md, extensions=['tables', 'fenced_code'])\nwith open(r'{}', 'w', encoding='utf-8') as f: f.write('<html><head><meta charset=\"utf-8\"></head><body>' + html + '</body></html>')\nprint('转换完成')",
+                input_path, output_path,
+            );
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &code])
+                .output()
+                .await
+                .map_err(|e| format!("Python 执行失败: {}", e))?;
+
+            if output.status.success() {
+                Ok(format!("Markdown 转换完成: {} -> {}", input_path, output_path))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("Markdown 转换失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── web_scrape: Python requests + BeautifulSoup ──
+        "web_scrape" => {
+            let url = arguments["url"]
+                .as_str()
+                .ok_or("web_scrape: missing url")?;
+            let selector = arguments["selector"].as_str().unwrap_or("");
+            let output_path = arguments["output_path"].as_str();
+
+            let selector_code = if selector.is_empty() {
+                "elements = soup.find_all(['h1','h2','h3','p','li'])".to_string()
+            } else {
+                format!("elements = soup.select('{}')", selector.replace('\'', "\\'"))
+            };
+
+            let save_code = match output_path {
+                Some(path) => format!(
+                    "\nimport json\nwith open(r'{}', 'w', encoding='utf-8') as f: json.dump(results, f, ensure_ascii=False, indent=2)\nprint(f'已保存 {{len(results)}} 条数据到 {}')",
+                    path, path
+                ),
+                None => "\nfor r in results[:30]: print(r)".to_string(),
+            };
+
+            let code = format!(
+                "import requests\nfrom bs4 import BeautifulSoup\nr = requests.get('{}', timeout=15, headers={{'User-Agent':'Mozilla/5.0'}})\nr.encoding = r.apparent_encoding\nsoup = BeautifulSoup(r.text, 'lxml')\n{}\nresults = [el.get_text(strip=True) for el in elements if el.get_text(strip=True)]{}",
+                url.replace('\'', "\\'"),
+                selector_code,
+                save_code,
+            );
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &code])
+                .output()
+                .await
+                .map_err(|e| format!("Python 执行失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(format!("网页数据提取完成:\n{}", stdout.trim()))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("网页爬取失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── translate_text: free translation ──
+        "translate_text" => {
+            let text = arguments["text"]
+                .as_str()
+                .ok_or("translate_text: missing text")?;
+            let target_lang = arguments["target_language"]
+                .as_str()
+                .ok_or("translate_text: missing target_language")?;
+
+            // Use a simple translation approach via Google Translate unofficial API
+            let code = format!(
+                r#"import urllib.request, urllib.parse, json
+text = '''{}'''
+tl = '{}'
+encoded = urllib.parse.quote(text)
+url = f'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={{tl}}&dt=t&q={{encoded}}'
+req = urllib.request.Request(url, headers={{'User-Agent':'Mozilla/5.0'}})
+with urllib.request.urlopen(req, timeout=10) as r:
+    data = json.loads(r.read())
+    result = ''.join([s[0] for s in data[0] if s[0]])
+    print(result)"#,
+                text.replace("'''", "\\'\\'\\'\\'"), target_lang,
+            );
+
+            let output = tokio::process::Command::new("python")
+                .args(&["-c", &code])
+                .output()
+                .await
+                .map_err(|e| format!("翻译执行失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(format!("翻译结果 ({}): {}", target_lang, stdout.trim()))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("翻译失败: {}", stderr.trim()))
+            }
+        }
+
+        // ── compress_archive: PowerShell Compress-Archive / Expand-Archive ──
+        "compress_archive" => {
+            let action = arguments["action"]
+                .as_str()
+                .ok_or("compress_archive: missing action")?;
+            let source = arguments["source_path"]
+                .as_str()
+                .ok_or("compress_archive: missing source_path")?;
+            let output_path = arguments["output_path"]
+                .as_str()
+                .ok_or("compress_archive: missing output_path")?;
+
+            let ps_cmd = match action {
+                "compress" => format!(
+                    "Compress-Archive -Path '{}' -DestinationPath '{}' -Force; Write-Output '压缩完成: {}'",
+                    source, output_path, output_path
+                ),
+                "extract" => format!(
+                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force; Write-Output '解压完成: {}'",
+                    source, output_path, output_path
+                ),
+                _ => return Err(format!("未知操作: {}，请使用 compress 或 extract", action)),
+            };
+
+            let output = tokio::process::Command::new("powershell")
+                .args(&["-NoProfile", "-Command", &ps_cmd])
+                .output()
+                .await
+                .map_err(|e| format!("PowerShell 执行失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(stdout.trim().to_string())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                Err(format!("压缩/解压失败: {}", stderr.trim()))
+            }
+        }
+
         _ => Err(format!("Unknown tool: {}", tool_name)),
+    }
+}
+
+/// Extract readable text from HTML content (simple tag stripping)
+fn extract_text_from_html(html: &str) -> String {
+    let mut result = String::new();
+    let mut in_tag = false;
+    let mut in_script = false;
+    let mut in_style = false;
+
+    let lower = html.to_lowercase();
+    let chars: Vec<char> = html.chars().collect();
+    let lower_chars: Vec<char> = lower.chars().collect();
+
+    let mut i = 0;
+    while i < chars.len() {
+        // Check for script/style start
+        if i + 7 < lower_chars.len() && &lower[i..i+7] == "<script" {
+            in_script = true;
+        }
+        if i + 6 < lower_chars.len() && &lower[i..i+6] == "<style" {
+            in_style = true;
+        }
+        // Check for script/style end
+        if i + 9 < lower_chars.len() && &lower[i..i+9] == "</script>" {
+            in_script = false;
+            i += 9;
+            continue;
+        }
+        if i + 8 < lower_chars.len() && &lower[i..i+8] == "</style>" {
+            in_style = false;
+            i += 8;
+            continue;
+        }
+
+        if chars[i] == '<' {
+            in_tag = true;
+            // Add newline for block tags
+            if i + 3 < chars.len() {
+                let tag_start = &lower[i..lower.len().min(i+5)];
+                if tag_start.starts_with("<br") || tag_start.starts_with("<p") || tag_start.starts_with("<div") || tag_start.starts_with("<h") || tag_start.starts_with("<li") {
+                    result.push('\n');
+                }
+            }
+        } else if chars[i] == '>' {
+            in_tag = false;
+        } else if !in_tag && !in_script && !in_style {
+            result.push(chars[i]);
+        }
+        i += 1;
+    }
+
+    // Decode common HTML entities
+    let result = result
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&nbsp;", " ")
+        .replace("&#39;", "'");
+
+    // Collapse whitespace
+    let lines: Vec<String> = result.lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    let text = lines.join("\n");
+    // Truncate for LLM context
+    if text.len() > 6000 {
+        format!("{}...\n\n(已截断，共 {} 字符)", &text[..6000], text.len())
+    } else {
+        text
     }
 }

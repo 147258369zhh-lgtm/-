@@ -1,3 +1,4 @@
+use crate::{app_log, app_error};
 use crate::db::DbPool;
 use crate::models::{Project, ProjectFile};
 use std::fs;
@@ -15,6 +16,7 @@ pub async fn create_project(
     root_path: String,
     remarks: Option<String>,
 ) -> Result<Project, String> {
+    app_log!("CMD", "create_project: name={}, root_path={}", name, root_path);
     let id = Uuid::new_v4().to_string();
     let project_path = Path::new(&root_path).join(&id);
 
@@ -52,6 +54,7 @@ pub async fn create_project(
         .await
         .map_err(|e| e.to_string())?;
 
+    app_log!("CMD", "create_project OK: id={}", id);
     Ok(Project {
         id,
         name,
@@ -70,12 +73,20 @@ pub async fn create_project(
 
 #[tauri::command]
 pub async fn list_projects(pool: State<'_, DbPool>) -> Result<Vec<Project>, String> {
-    sqlx::query_as::<_, Project>(
+    app_log!("CMD", "list_projects called");
+    let result = sqlx::query_as::<_, Project>(
         "SELECT * FROM projects ORDER BY last_opened_at DESC, created_at DESC",
     )
     .fetch_all(&*pool)
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| {
+        app_error!("CMD", "list_projects FAILED: {}", e);
+        e.to_string()
+    });
+    if let Ok(ref projects) = result {
+        app_log!("CMD", "list_projects OK: {} projects", projects.len());
+    }
+    result
 }
 
 #[tauri::command]
@@ -125,6 +136,7 @@ pub async fn import_files(
     category: String,
     stage: String,
 ) -> Result<Vec<ProjectFile>, String> {
+    app_log!("CMD", "import_files: project_id={}, {} files, category={}", project_id, source_paths.len(), category);
     let project = sqlx::query_as::<_, Project>("SELECT * FROM projects WHERE id = ?")
         .bind(&project_id)
         .fetch_one(&*pool)
@@ -203,6 +215,7 @@ pub async fn import_files(
         });
     }
 
+    app_log!("CMD", "import_files OK: {} files imported", imported_files.len());
     Ok(imported_files)
 }
 
@@ -266,6 +279,7 @@ pub async fn update_file_metadata(
 
 #[tauri::command]
 pub async fn delete_file(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+    app_log!("CMD", "delete_file: id={}", id);
     let file = sqlx::query_as::<_, ProjectFile>("SELECT * FROM files WHERE id = ?")
         .bind(&id)
         .fetch_one(&*pool)

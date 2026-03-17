@@ -9,6 +9,7 @@ import { SettingsManager } from "./components/SettingsManager";
 import { useStore } from "./store/useStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, Filter, Plus, LayoutGrid, MapPin, Tag } from "lucide-react";
+import logger from "./utils/logger";
 import { TitleBar } from "./components/TitleBar";
 import { AiChatSidebar } from "./components/AiChatSidebar";
 import { TravelManager } from "./components/TravelManager";
@@ -16,6 +17,7 @@ import { GridOverlay } from "./components/GridOverlay";
 import { Suspense, lazy } from "react";
 
 const AbilityManager = lazy(() => import("./components/AbilityManager"));
+const AgentManager = lazy(() => import("./components/AgentManager"));
 
 function App() {
   const [activeTab, setActiveTab] = useState("projects");
@@ -45,18 +47,21 @@ function App() {
 
   const fetchProjects = async () => {
     try {
+      logger.info('App', 'Fetching projects...');
       const data: any = await invoke("list_projects");
       setProjects(data || []);
+      logger.info('App', `Loaded ${(data || []).length} projects`);
       const meta: any = await invoke("get_project_meta_history");
       if (Array.isArray(meta)) {
         setMetaHistory({ cities: meta[0] || [], types: meta[1] || [] });
       }
     } catch (error) {
-      console.error("App: Failed to fetch projects:", error);
+      logger.error('App', `Failed to fetch projects: ${error}`);
     }
   };
 
   useEffect(() => {
+    logger.info('App', '=== Frontend App Mounted ===');
     fetchProjects();
   }, []);
 
@@ -78,6 +83,7 @@ function App() {
 
   const handleToggleAiChat = useCallback(() => setIsAiChatOpen((v) => !v), []);
   const handleTabChange = useCallback((tab: string) => {
+    logger.info('App', `Tab changed to: ${tab}`);
     setActiveTab(tab);
     setActiveProject(null);
   }, []);
@@ -387,6 +393,16 @@ function App() {
               }
             >
               <AbilityManager />
+            </Suspense>
+          ) : activeTab === "agents" ? (
+            <Suspense
+              fallback={
+                <div className="flex-1 flex items-center justify-center">
+                  Loading Agent Manager...
+                </div>
+              }
+            >
+              <AgentManager />
             </Suspense>
           ) : activeTab === "common" ? (
             <CommonInfoManager />

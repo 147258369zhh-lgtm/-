@@ -143,18 +143,36 @@ const BUILTIN_TOOLS: BuiltinTool[] = [
   { name: 'file_move', label: '移动文件', description: '移动或重命名文件', category: 'file' },
   { name: 'file_list', label: '列出目录', description: '列出目录下所有文件', category: 'file' },
   { name: 'file_search', label: '搜索文件', description: '在文件内容中搜索关键词', category: 'file' },
-  // System
-  { name: 'shell_run', label: '执行命令', description: '在本地执行 shell 命令', category: 'system' },
+  // Office / Table
+  { name: 'excel_read', label: 'Excel 读取', description: '读取 Excel 表格数据', category: 'office' },
+  { name: 'excel_write', label: 'Excel 写入', description: '创建或写入 Excel 文件', category: 'office' },
+  { name: 'excel_analyze', label: 'Excel 分析', description: '统计分析 Excel 数据', category: 'office' },
+  { name: 'csv_to_excel', label: 'CSV 转 Excel', description: 'CSV 文件转 Excel 格式', category: 'office' },
+  { name: 'data_merge', label: '数据合并', description: '合并多个 Excel/CSV 文件', category: 'office' },
+  { name: 'table_transform', label: '表格转换', description: '行列转置/透视/清洗', category: 'office' },
+  // Document
+  { name: 'word_read', label: 'Word 读取', description: '读取 Word 文档内容', category: 'document' },
+  { name: 'word_write', label: 'Word 写入', description: '创建或修改 Word 文档', category: 'document' },
+  { name: 'ppt_read', label: 'PPT 读取', description: '读取 PowerPoint 内容', category: 'document' },
+  { name: 'ppt_create', label: 'PPT 创建', description: '创建 PowerPoint 演示', category: 'document' },
+  { name: 'pdf_read', label: 'PDF 读取', description: '读取 PDF 文件文本', category: 'document' },
+  { name: 'doc_convert', label: '格式转换', description: 'Word/CSV/HTML 格式互转', category: 'document' },
+  { name: 'image_process', label: '图片处理', description: '裁剪/缩放/水印/拼接', category: 'document' },
+  { name: 'report_generate', label: '生成报告', description: '数据驱动生成 Word 报告', category: 'document' },
+  // AI
+  { name: 'ai_chat', label: 'AI 对话', description: '调用大模型进行对话', category: 'ai' },
+  { name: 'rag_query', label: '知识检索', description: '在文档中语义检索', category: 'ai' },
+  { name: 'text_extract', label: '文本提取', description: 'AI 提取结构化信息', category: 'ai' },
+  // Browser
+  { name: 'browser_navigate', label: '打开网页', description: '打开 URL 并截图', category: 'browser' },
+  { name: 'browser_script', label: '浏览器脚本', description: 'Playwright 自动化脚本', category: 'browser' },
   // Project
   { name: 'project_list', label: '项目列表', description: '列出所有项目信息', category: 'project' },
   { name: 'project_files', label: '项目文件', description: '列出指定项目的文件', category: 'project' },
   { name: 'project_context', label: '项目上下文', description: '获取项目设计上下文', category: 'project' },
-  // Browser
-  { name: 'browser_open', label: '打开网页', description: '在自动化浏览器中打开 URL', category: 'browser' },
-  { name: 'browser_fill', label: '填写表单', description: '在网页中填写输入框', category: 'browser' },
-  { name: 'browser_click', label: '点击元素', description: '点击网页上的按钮或链接', category: 'browser' },
-  { name: 'browser_extract', label: '提取内容', description: '提取当前网页的文本摘要', category: 'browser' },
-  { name: 'browser_scroll', label: '滚动页面', description: '滚动网页页面', category: 'browser' },
+  // System
+  { name: 'shell_run', label: '执行命令', description: '在本地执行 shell 命令', category: 'system' },
+  { name: 'json_process', label: 'JSON 处理', description: 'JSON 提取/验证/格式化', category: 'system' },
   // MCP
   { name: 'mcp_list_tools', label: 'MCP 列表', description: '列出已连接 MCP 的所有工具', category: 'mcp' },
   { name: 'mcp_call_tool', label: 'MCP 调用', description: '调用 MCP Server 上的工具', category: 'mcp' },
@@ -167,9 +185,6 @@ const BUILTIN_TOOLS: BuiltinTool[] = [
   // Survey
   { name: 'survey_get', label: '获取勘察', description: '获取项目的勘察数据', category: 'survey' },
   { name: 'survey_update', label: '更新勘察', description: '更新勘察日期/地点/摘要', category: 'survey' },
-  // AI
-  { name: 'ai_chat', label: 'AI 对话', description: '调用已配置的大模型进行对话', category: 'ai' },
-  { name: 'rag_query', label: '知识检索', description: '在已索引文档中进行语义检索', category: 'ai' },
   // Automation
   { name: 'automation_list', label: '方案列表', description: '列出自动化方案', category: 'automation' },
   { name: 'automation_run', label: '执行方案', description: '执行指定的自动化方案', category: 'automation' },
@@ -177,14 +192,16 @@ const BUILTIN_TOOLS: BuiltinTool[] = [
 
 const CATEGORY_ICONS: Record<string, { icon: any; color: string; bg: string }> = {
   file: { icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
-  system: { icon: Terminal, color: 'text-orange-500', bg: 'bg-orange-50' },
-  project: { icon: Database, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  office: { icon: Database, color: 'text-green-500', bg: 'bg-green-50' },
+  document: { icon: FileText, color: 'text-cyan-500', bg: 'bg-cyan-50' },
+  ai: { icon: Cpu, color: 'text-violet-500', bg: 'bg-violet-50' },
   browser: { icon: Globe, color: 'text-indigo-500', bg: 'bg-indigo-50' },
+  project: { icon: Database, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  system: { icon: Terminal, color: 'text-orange-500', bg: 'bg-orange-50' },
   mcp: { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50' },
   template: { icon: Clipboard, color: 'text-cyan-500', bg: 'bg-cyan-50' },
   info: { icon: BookOpen, color: 'text-teal-500', bg: 'bg-teal-50' },
   survey: { icon: Compass, color: 'text-rose-500', bg: 'bg-rose-50' },
-  ai: { icon: Cpu, color: 'text-violet-500', bg: 'bg-violet-50' },
   automation: { icon: Cog, color: 'text-amber-500', bg: 'bg-amber-50' },
 };
 
@@ -875,10 +892,11 @@ const AgentEditor = ({ agent, onBack, onSave, installedSkills }: { agent: AgentC
     return { systemPrompt, tools, model: (llmNode?.data.model as string) || 'unknown', agentName };
   };
 
-  const handleTestChat = async () => {
-    if (!chatInput.trim() || isAgentRunning) return;
-    const userMsg = chatInput.trim();
+  const handleTestChat = async (directMsg?: string) => {
+    const msg = directMsg || chatInput.trim();
+    if (!msg || isAgentRunning) return;
     setChatInput('');
+    const userMsg = msg;
     setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsAgentRunning(true);
     setAgentSteps([]);
@@ -1140,74 +1158,53 @@ const AgentEditor = ({ agent, onBack, onSave, installedSkills }: { agent: AgentC
             )}
           </div>
 
-          {/* 5. Tool Toggles */}
-          <div className="space-y-2">
+          {/* 5. Tool Summary (tools managed in right panel) */}
+          <div className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Wrench size={14} className="text-purple-500" />
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">可用工具</span>
+                <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">工具库</span>
               </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setEnabledTools(new Set(BUILTIN_TOOLS.map(t => t.name)))}
-                  className="text-[9px] font-bold text-blue-500 hover:text-blue-700 px-2 py-0.5 rounded-full hover:bg-blue-50 transition-colors"
-                >全选</button>
-                <button
-                  onClick={() => setEnabledTools(new Set())}
-                  className="text-[9px] font-bold text-slate-400 hover:text-slate-600 px-2 py-0.5 rounded-full hover:bg-slate-50 transition-colors"
-                >清空</button>
+              <div className="px-2 py-0.5 bg-purple-500 text-white rounded-full text-[9px] font-black">
+                {enabledTools.size}/{BUILTIN_TOOLS.length}
               </div>
             </div>
-            <div className="text-[9px] text-slate-400 font-medium">
-              已启用 {enabledTools.size}/{BUILTIN_TOOLS.length} 个工具
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {Object.entries(
-                BUILTIN_TOOLS.reduce((acc, tool) => {
-                  (acc[tool.category] = acc[tool.category] || []).push(tool);
-                  return acc;
-                }, {} as Record<string, BuiltinTool[]>)
-              ).map(([cat, tools]) => (
-                <div key={cat}>
-                  <div className="flex items-center justify-between px-1 py-1">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cat}</span>
-                    <button
-                      onClick={() => {
-                        const catTools = tools.map(t => t.name);
-                        const allEnabled = catTools.every(n => enabledTools.has(n));
-                        setEnabledTools(prev => {
-                          const next = new Set(prev);
-                          catTools.forEach(n => allEnabled ? next.delete(n) : next.add(n));
-                          return next;
-                        });
-                      }}
-                      className="text-[8px] font-bold text-blue-400 hover:text-blue-600"
-                    >{tools.every(t => enabledTools.has(t.name)) ? '取消' : '全选'}</button>
-                  </div>
-                  {tools.map(tool => (
-                    <label key={tool.name} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group">
-                      <input
-                        type="checkbox"
-                        checked={enabledTools.has(tool.name)}
-                        onChange={() => {
-                          setEnabledTools(prev => {
-                            const next = new Set(prev);
-                            next.has(tool.name) ? next.delete(tool.name) : next.add(tool.name);
-                            return next;
-                          });
-                        }}
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 accent-blue-600"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">{tool.label}</div>
-                      </div>
-                      <span className="text-[8px] text-slate-300 font-mono shrink-0">{tool.name}</span>
-                    </label>
-                  ))}
-                </div>
-              ))}
+            <div className="text-[9px] text-purple-400 font-medium mt-1.5">
+              在右侧面板管理可用工具 →
             </div>
           </div>
+        </div>
+
+        {/* Fixed Bottom Action Buttons */}
+        <div className="p-4 border-t border-slate-100 bg-white/80 backdrop-blur-sm space-y-2 shrink-0">
+          <button
+            onClick={() => {
+              if (!systemInstruction.trim()) {
+                alert('请先填写系统指令');
+                return;
+              }
+              if (isAgentRunning) return;
+              // Open test panel and directly run the agent
+              setChatOpen(true);
+              handleTestChat(systemInstruction.trim());
+            }}
+            disabled={isAgentRunning || !systemInstruction.trim()}
+            className={`w-full py-3.5 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+              isAgentRunning 
+                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25 animate-pulse cursor-wait'
+                : !systemInstruction.trim()
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40'
+            }`}
+          >
+            <Play size={16} /> {isAgentRunning ? '⏳ Agent 运行中...' : '🚀 生成 Agent'}
+          </button>
+          <button
+            onClick={handleSave}
+            className="w-full py-2.5 bg-white border-2 border-slate-200 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all"
+          >
+            <Save size={14} /> 保存配置
+          </button>
         </div>
       </div>
 
@@ -1256,44 +1253,31 @@ const AgentEditor = ({ agent, onBack, onSave, installedSkills }: { agent: AgentC
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Right: Properties Panel or Chat Test */}
-      <div className="w-80 bg-white border-l border-slate-100 flex flex-col shrink-0 shadow-xl z-10 rounded-l-2xl">
-        {chatOpen ? (
-          /* Agent Test Chat Panel */
-          <div className="flex flex-col h-full">
-            <div className="px-6 py-4 border-b border-slate-100 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-xl ${isAgentRunning ? 'bg-amber-50' : 'bg-blue-50'}`}>
-                    <Bot size={18} className={isAgentRunning ? 'text-amber-600 animate-pulse' : 'text-blue-600'} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800">Agent 测试</h3>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                      {isAgentRunning ? '🟢 正在执行...' : '五层 Agent 架构'}
-                    </p>
-                  </div>
+        {/* Bottom Test Panel (overlay on canvas) */}
+        {chatOpen && (
+          <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200/80 shadow-2xl z-20 flex flex-col"
+            style={{ height: '45%', minHeight: 200 }}
+          >
+            {/* Panel Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg ${isAgentRunning ? 'bg-amber-50' : 'bg-blue-50'}`}>
+                  <Bot size={16} className={isAgentRunning ? 'text-amber-600 animate-pulse' : 'text-blue-600'} />
                 </div>
-                <button onClick={() => {
-                setChatMessages([]); setAgentSteps([]); setAgentPlan('');
-                // Restore original canvas if saved
-                if (savedCanvasRef.current) {
-                  setNodes(savedCanvasRef.current.nodes);
-                  setEdges(savedCanvasRef.current.edges);
-                  savedCanvasRef.current = null;
-                }
-              }} className="p-2 hover:bg-slate-100 rounded-xl text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800">Agent 测试</h3>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">
+                    {isAgentRunning ? '🟢 正在执行...' : '五层 Agent 架构'}
+                  </p>
+                </div>
               </div>
-              {/* Model Selector */}
               <div className="flex items-center gap-2">
-                <Cpu size={12} className="text-slate-400 shrink-0" />
                 <select
                   value={selectedModelId}
                   onChange={(e) => setSelectedModelId(e.target.value)}
                   disabled={isAgentRunning}
-                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 outline-none focus:border-blue-500 transition-colors disabled:opacity-50 appearance-none cursor-pointer"
+                  className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 outline-none focus:border-blue-500 disabled:opacity-50 appearance-none cursor-pointer"
                 >
                   <option value="">自动选择模型</option>
                   {aiConfigs.map(c => (
@@ -1302,471 +1286,281 @@ const AgentEditor = ({ agent, onBack, onSave, installedSkills }: { agent: AgentC
                     </option>
                   ))}
                 </select>
+                <button onClick={() => {
+                  setChatMessages([]); setAgentSteps([]); setAgentPlan('');
+                  if (savedCanvasRef.current) {
+                    setNodes(savedCanvasRef.current.nodes);
+                    setEdges(savedCanvasRef.current.edges);
+                    savedCanvasRef.current = null;
+                  }
+                }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                <button onClick={() => setChatOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-300 hover:text-slate-600 transition-colors"><X size={14} /></button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {chatMessages.length === 0 && !isAgentRunning && (
-                <div className="h-full flex flex-col items-center justify-center text-center">
-                  <Bot size={48} className="text-slate-100 mb-4" />
-                  <p className="text-sm text-slate-300 font-bold">发送消息测试 Agent</p>
-                  <p className="text-[10px] text-slate-300 mt-1">Agent 将通过 ReAct Loop 自主调用工具完成任务</p>
-                </div>
-              )}
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`max-w-[90%] px-4 py-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-md' : 'bg-slate-100 text-slate-700 rounded-bl-md'}`}>
-                    {msg.content}
+            {/* Panel Body - Two Column Layout */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left: Execution Steps Timeline */}
+              <div className="w-60 border-r border-slate-100 overflow-y-auto p-3 space-y-1.5 shrink-0">
+                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1">执行步骤</div>
+                {agentSteps.length === 0 && chatMessages.flatMap(m => m.steps || []).length === 0 && !isAgentRunning && (
+                  <div className="text-[9px] text-slate-300 italic px-1">发送消息后查看执行步骤</div>
+                )}
+                {/* Historical steps from messages */}
+                {chatMessages.flatMap((msg, mi) => (msg.steps || []).filter((s: any) => ['tool_call', 'tool_result', 'planning', 'reflection'].includes(s.step_type)).map((step: any, si: number) => (
+                  <div key={`h-${mi}-${si}`} className={`px-2.5 py-2 rounded-lg text-[9px] border ${
+                    step.step_type === 'planning' ? 'bg-blue-50 border-blue-100 text-blue-700'
+                    : step.step_type === 'reflection' ? 'bg-orange-50 border-orange-100 text-orange-700'
+                    : step.step_type === 'tool_call' ? 'bg-purple-50 border-purple-100 text-purple-700'
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                  }`}>
+                    <div className="flex items-center gap-1">
+                      {step.step_type === 'planning' ? '📋' : step.step_type === 'reflection' ? '🔄' : step.step_type === 'tool_call' ? '⚡' : '✅'}
+                      <span className="font-black truncate">{step.tool_name || (step.step_type === 'planning' ? '规划' : step.step_type === 'reflection' ? '反思' : '完成')}</span>
+                      {step.duration_ms && <span className="text-[7px] opacity-60 ml-auto shrink-0">{step.duration_ms}ms</span>}
+                    </div>
                   </div>
-                  {/* Tool execution steps */}
-                  {msg.steps && msg.steps.length > 0 && (
-                    <div className="mt-2 max-w-[90%] space-y-1.5">
-                      <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">执行日志 ({msg.steps.filter((s: any) => s.step_type === 'tool_call').length} 次工具调用)</div>
-                      {msg.steps.filter((s: any) => ['tool_call', 'tool_result', 'planning', 'reflection'].includes(s.step_type)).map((step: any, j: number) => (
-                        <div key={j} className={`px-3 py-2 rounded-xl text-[10px] border ${
-                          step.step_type === 'planning'
-                            ? 'bg-blue-50 border-blue-100 text-blue-700'
-                            : step.step_type === 'reflection'
-                            ? 'bg-orange-50 border-orange-100 text-orange-700'
-                            : step.step_type === 'tool_call'
-                            ? 'bg-purple-50 border-purple-100 text-purple-700'
-                            : 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                        }`}>
-                          <div className="flex items-center gap-1.5">
-                            {step.step_type === 'planning' ? '📋' : step.step_type === 'reflection' ? '🔄' : step.step_type === 'tool_call' ? '⚡' : '✅'}
-                            <span className="font-black">{step.tool_name || (step.step_type === 'planning' ? '任务规划' : step.step_type === 'reflection' ? '反思调整' : '完成')}</span>
-                            {step.duration_ms && <span className="text-[8px] opacity-60 ml-auto">{step.duration_ms}ms</span>}
-                          </div>
-                          {step.tool_args && (
-                            <pre className="mt-1 text-[9px] opacity-70 max-h-16 overflow-y-auto">{JSON.stringify(step.tool_args, null, 1)}</pre>
-                          )}
-                          {step.tool_result && (
-                            <pre className="mt-1 text-[9px] opacity-70 max-h-20 overflow-y-auto whitespace-pre-wrap">{step.tool_result.length > 200 ? step.tool_result.slice(0, 200) + '...' : step.tool_result}</pre>
-                          )}
-                        </div>
-                      ))}
+                )))}
+                {/* Live steps */}
+                {isAgentRunning && agentSteps.map((step, i) => (
+                  <div key={`l-${i}`} className={`px-2.5 py-2 rounded-lg text-[9px] border animate-in fade-in duration-300 ${
+                    step.step_type === 'planning' ? 'bg-blue-50 border-blue-100 text-blue-700'
+                    : step.step_type === 'reflection' ? 'bg-orange-50 border-orange-100 text-orange-700'
+                    : step.step_type === 'tool_call' ? 'bg-purple-50 border-purple-100 text-purple-700'
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                  }`}>
+                    <div className="flex items-center gap-1">
+                      {step.step_type === 'planning' ? '📋' : step.step_type === 'reflection' ? '🔄' : step.step_type === 'tool_call' ? '⚡' : '✅'}
+                      <span className="font-black truncate">{step.tool_name || (step.step_type === 'planning' ? '规划' : step.step_type === 'reflection' ? '反思' : '完成')}</span>
+                      {step.duration_ms && <span className="text-[7px] opacity-60 ml-auto shrink-0">{step.duration_ms}ms</span>}
+                    </div>
+                    {step.content && step.step_type === 'reflection' && (
+                      <div className="mt-0.5 text-[8px] opacity-70 truncate">{step.content}</div>
+                    )}
+                  </div>
+                ))}
+                {isAgentRunning && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+                    <span className="text-[9px] font-bold text-amber-700">执行中...</span>
+                  </div>
+                )}
+              </div>
+              {/* Right: Chat Messages & Results */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.length === 0 && !isAgentRunning && (
+                    <div className="h-full flex flex-col items-center justify-center text-center">
+                      <Bot size={32} className="text-slate-100 mb-2" />
+                      <p className="text-xs text-slate-300 font-bold">输入指令测试 Agent</p>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                      <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-md' : 'bg-slate-100 text-slate-700 rounded-bl-md'}`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {agentPlan && (
+                    <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl">
+                      <div className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">📋 任务计划</div>
+                      <pre className="text-[9px] text-blue-700 whitespace-pre-wrap leading-relaxed font-medium">{agentPlan.replace('📋 任务计划:\n', '')}</pre>
                     </div>
                   )}
                 </div>
-              ))}
-              {/* Real-time execution indicator */}
-              {/* Task Plan Display */}
-              {agentPlan && (
-                <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-2xl">
-                  <div className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">📋 任务计划</div>
-                  <pre className="text-[10px] text-blue-700 whitespace-pre-wrap leading-relaxed font-medium">{agentPlan.replace('📋 任务计划:\n', '')}</pre>
-                </div>
-              )}
-              {isAgentRunning && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                    <span className="text-xs font-bold text-amber-700">Agent 正在思考和执行...</span>
+                {/* Input Bar */}
+                <div className="p-3 border-t border-slate-100 shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      type="text" value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !isAgentRunning && handleTestChat()}
+                      placeholder={isAgentRunning ? 'Agent 执行中...' : '输入指令测试 Agent...'}
+                      disabled={isAgentRunning}
+                      className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+                    />
+                    <button onClick={handleTestChat} disabled={isAgentRunning} className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5">
+                      <Send size={12} /> 发送
+                    </button>
                   </div>
-                  {agentSteps.map((step, i) => (
-                    <div key={i} className={`px-3 py-2 rounded-xl text-[10px] border animate-in fade-in duration-300 ${
-                      step.step_type === 'planning'
-                        ? 'bg-blue-50 border-blue-100 text-blue-700'
-                        : step.step_type === 'reflection'
-                        ? 'bg-orange-50 border-orange-100 text-orange-700'
-                        : step.step_type === 'tool_call'
-                        ? 'bg-purple-50 border-purple-100 text-purple-700'
-                        : 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                    }`}>
-                      <div className="flex items-center gap-1.5">
-                        {step.step_type === 'planning' ? '📋' : step.step_type === 'reflection' ? '🔄' : step.step_type === 'tool_call' ? '⚡' : '✅'}
-                        <span className="font-black">{step.tool_name || (step.step_type === 'planning' ? '任务规划' : step.step_type === 'reflection' ? '反思调整' : '完成')}</span>
-                        {step.duration_ms && <span className="text-[8px] opacity-60 ml-auto">{step.duration_ms}ms</span>}
-                      </div>
-                      {step.content && step.step_type === 'reflection' && (
-                        <div className="mt-1 text-[9px] opacity-70">{step.content}</div>
-                      )}
-                    </div>
-                  ))}
                 </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-slate-100">
-              <div className="flex gap-2">
-                <input
-                  type="text" value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !isAgentRunning && handleTestChat()}
-                  placeholder={isAgentRunning ? 'Agent 执行中...' : '输入指令测试 Agent...'}
-                  disabled={isAgentRunning}
-                  className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
-                />
-                <button onClick={handleTestChat} disabled={isAgentRunning} className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Send size={14} />
-                </button>
               </div>
             </div>
+            {/* Progress Bar */}
+            {isAgentRunning && (
+              <div className="absolute top-0 left-0 right-0 h-0.5">
+                <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 animate-pulse" style={{ width: '100%' }} />
+              </div>
+            )}
           </div>
-        ) : selectedNode ? (
-          /* Node Properties Panel - Type-Specific */
-          <div className="p-6 overflow-y-auto flex-1 animate-in slide-in-from-right duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-black text-slate-800 text-lg tracking-tight">节点属性</h3>
-              <button onClick={() => setSelectedNode(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-300 hover:text-slate-600 transition-colors"><X size={18} /></button>
-            </div>
+        )}
+      </div>
 
-            {/* Common: Name field */}
-            <div className="space-y-2 mb-5">
+      {/* Right: Tool Library Panel */}
+      <div className="w-80 bg-white border-l border-slate-100 flex flex-col shrink-0 shadow-xl z-10 rounded-l-2xl">
+        {/* Node Properties (if selected) */}
+        {selectedNode ? (
+          <div className="border-b border-slate-100 max-h-[50%] overflow-y-auto p-5 animate-in slide-in-from-right duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-slate-800 text-sm tracking-tight">节点属性</h3>
+              <button onClick={() => setSelectedNode(null)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-300 hover:text-slate-600 transition-colors"><X size={16} /></button>
+            </div>
+            <div className="space-y-2">
               <label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] block">名称</label>
               <input type="text" value={(selectedNode.data.label as string) || ''} onChange={(e) => {
                 const label = e.target.value;
                 setNodes(nds => nds.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, label } } : n));
                 setSelectedNode(prev => prev ? { ...prev, data: { ...prev.data, label } } : null);
-              }} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:border-blue-500 font-bold" />
+              }} className="w-full px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs outline-none focus:border-blue-500 font-bold" />
             </div>
+            <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== selectedNode.id)); setSelectedNode(null); }} className="w-full mt-3 py-2 bg-red-50 text-red-500 rounded-xl text-[10px] font-black hover:bg-red-100 transition-colors flex items-center justify-center gap-1.5">
+              <Trash2 size={12} /> 删除
+            </button>
+          </div>
+        ) : null}
 
-            {/* Type-specific panels */}
-            {selectedNode.type === 'agent-file' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-3">📁 输入文件</div>
-                  <div className="space-y-2">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { open } = await import('@tauri-apps/plugin-dialog');
-                          const files = await open({ multiple: true, title: '选择输入文件' });
-                          if (files) {
-                            const fileList = Array.isArray(files) ? files : [files];
-                            const currentFiles = ((selectedNode.data.files as string[]) || []);
-                            const updated = [...currentFiles, ...fileList.map((f: any) => typeof f === 'string' ? f : f.path)];
-                            updateNodeData(selectedNode.id, { files: updated, detail: `输入 ${updated.length} 个文件` });
-                          }
-                        } catch (e) { console.error('File dialog failed:', e); }
-                      }}
-                      className="w-full py-3 bg-emerald-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all shadow-lg"
-                    >
-                      <Upload size={14} /> 选择文件
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { open } = await import('@tauri-apps/plugin-dialog');
-                          const folder = await open({ directory: true, title: '选择文件夹' });
-                          if (folder) {
-                            const folderPath = typeof folder === 'string' ? folder : (folder as any).path || String(folder);
-                            const currentFiles = ((selectedNode.data.files as string[]) || []);
-                            const updated = [...currentFiles, `📂 ${folderPath}`];
-                            updateNodeData(selectedNode.id, { files: updated, detail: `包含 ${updated.length} 个资源` });
-                          }
-                        } catch (e) { console.error('Folder dialog failed:', e); }
-                      }}
-                      className="w-full py-3 bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-95 transition-all"
-                    >
-                      <Database size={14} /> 选择文件夹
-                    </button>
-                  </div>
-                  {((selectedNode.data.files as string[]) || []).length > 0 && (
-                    <div className="mt-4 space-y-1.5">
-                      <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">已选择 ({((selectedNode.data.files as string[]) || []).length})</div>
-                      {((selectedNode.data.files as string[]) || []).map((f: string, i: number) => (
-                        <div key={i} className="flex items-center justify-between px-3 py-2 bg-white rounded-xl text-[10px] text-slate-600 font-medium border border-emerald-100">
-                          <span className="truncate flex-1">{f.includes('📂') ? f : f.split(/[\\/]/).pop()}</span>
-                          <button onClick={() => {
-                            const updated = ((selectedNode.data.files as string[]) || []).filter((_: string, idx: number) => idx !== i);
-                            updateNodeData(selectedNode.id, { files: updated, detail: updated.length > 0 ? `包含 ${updated.length} 个资源` : '' });
-                          }} className="text-red-400 hover:text-red-600 ml-2 shrink-0"><X size={12} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+        {/* Tool Library */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg">
+                  <Wrench size={14} className="text-white" />
                 </div>
-                {/* Output Path */}
-                <div className="p-4 bg-sky-50 rounded-2xl border border-sky-100">
-                  <div className="text-[9px] font-black text-sky-500 uppercase tracking-widest mb-3">📤 输出路径 (可选)</div>
-                  <div className="flex gap-2">
-                    <input type="text" value={(selectedNode.data.outputPath as string) || ''}
-                      onChange={(e) => updateNodeData(selectedNode.id, { outputPath: e.target.value })}
-                      className="flex-1 px-3 py-2.5 bg-white border border-sky-200 rounded-xl text-xs outline-none focus:border-sky-500 font-medium"
-                      placeholder="C:\\output\\result.txt" />
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { save } = await import('@tauri-apps/plugin-dialog');
-                          const path = await save({ title: '选择输出位置' });
-                          if (path) updateNodeData(selectedNode.id, { outputPath: path });
-                        } catch (e) { console.error(e); }
-                      }}
-                      className="px-3 py-2.5 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 active:scale-95 transition-all shrink-0"
-                    >浏览</button>
-                  </div>
-                </div>
-                {/* Paste Text Data */}
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">📋 粘贴数据 (可选)</div>
-                  <textarea rows={4}
-                    value={(selectedNode.data.pasteData as string) || ''}
-                    onChange={(e) => updateNodeData(selectedNode.id, { pasteData: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 font-mono resize-none leading-relaxed"
-                    placeholder='直接粘贴 CSV/JSON/文本数据...' />
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">工具库</h3>
+                  <p className="text-[8px] text-slate-400 font-bold">已启用 {enabledTools.size}/{BUILTIN_TOOLS.length}</p>
                 </div>
               </div>
-            )}
-
-            {selectedNode.type === 'agent-instruction' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-[9px] font-black text-amber-500 uppercase tracking-widest">✒️ 指令编辑器</div>
-                    <select
-                      value={(selectedNode.data.lang as string) || 'text'}
-                      onChange={(e) => updateNodeData(selectedNode.id, { lang: e.target.value })}
-                      className="px-2 py-1 bg-white border border-amber-200 rounded-lg text-[10px] font-bold text-amber-700 outline-none"
-                    >
-                      <option value="text">自然语言</option>
-                      <option value="python">Python</option>
-                      <option value="javascript">JavaScript</option>
-                      <option value="shell">Shell 命令</option>
-                      <option value="prompt">Prompt 模板</option>
-                    </select>
-                  </div>
-                  <textarea
-                    rows={12}
-                    value={(selectedNode.data.detail as string) || ''}
-                    onChange={(e) => updateNodeData(selectedNode.id, { detail: e.target.value })}
-                    className={`w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:border-amber-500 resize-none leading-relaxed ${(selectedNode.data.lang as string) !== 'text' ? 'font-mono' : 'font-medium'}`}
-                    placeholder={{
-                      python: '# Python 脚本\nimport os\nprint(os.listdir("."))',
-                      javascript: '// JavaScript\nconsole.log("Hello")',
-                      shell: '# Shell 命令\nls -la /tmp\necho "done"',
-                      prompt: '你是一个{{role}}专家，擅长{{skill}}\n请用{{language}}回答',
-                      text: '输入自定义指令...\n例如：请用中文回答，并以表格形式展示'
-                    }[(selectedNode.data.lang as string) || 'text']}
-                  />
-                  {(selectedNode.data.lang as string) === 'prompt' && (
-                    <div className="mt-3 p-3 bg-white rounded-xl border border-amber-100">
-                      <div className="text-[9px] font-bold text-amber-500 mb-1">💡 变量提示</div>
-                      <div className="text-[10px] text-slate-500">使用 {'{{'}variable{'}}'}  语法，运行时自动替换</div>
-                    </div>
-                  )}
-                  {((selectedNode.data.lang as string) === 'python' || (selectedNode.data.lang as string) === 'shell') && (
-                    <div className="mt-3 p-3 bg-white rounded-xl border border-amber-100">
-                      <div className="text-[9px] font-bold text-amber-500 mb-1">⚠️ 执行模式</div>
-                      <div className="text-[10px] text-slate-500">此脚本将在 Agent 运行时作为可调用工具注册</div>
-                    </div>
-                  )}
-                </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setEnabledTools(new Set(BUILTIN_TOOLS.map(t => t.name)))}
+                  className="text-[9px] font-bold text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                >全选</button>
+                <button
+                  onClick={() => setEnabledTools(new Set())}
+                  className="text-[9px] font-bold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors"
+                >清空</button>
               </div>
-            )}
-
-            {selectedNode.type === 'agent-llm' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                  <div className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-3">🧠 模型选择</div>
-                  <select
-                    value={(selectedNode.data.model as string) || ''}
-                    onChange={(e) => updateNodeData(selectedNode.id, { model: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border border-rose-200 rounded-xl text-sm font-bold outline-none focus:border-rose-500"
-                  >
-                    <option value="">-- 选择大模型 --</option>
-                    <optgroup label="在线模型">
-                      <option value="deepseek-ai/DeepSeek-V3">DeepSeek V3</option>
-                      <option value="deepseek-ai/DeepSeek-R1">DeepSeek R1 (推理)</option>
-                      <option value="Qwen/Qwen2.5-72B-Instruct">Qwen 2.5 72B</option>
-                      <option value="meta-llama/Llama-3.3-70B-Instruct">Llama 3.3 70B</option>
-                    </optgroup>
-                    <optgroup label="本地模型">
-                      <option value="local">LM Studio 本地模型</option>
-                    </optgroup>
-                  </select>
-                  {(selectedNode.data.model as string) && (
-                    <div className="mt-3 p-3 bg-white rounded-xl border border-rose-100">
-                      <div className="text-[10px] font-bold text-rose-600">当前: {(selectedNode.data.model as string)}</div>
-                      <div className="text-[9px] text-slate-400 mt-1">{(selectedNode.data.model as string) === 'local' ? '请确保 LM Studio 已启动并加载模型' : '将通过 SiliconFlow API 调用'}</div>
-                    </div>
-                  )}
-                </div>
-                {/* Parameters */}
-                <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100">
-                  <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-4">⚙️ 参数设置</div>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[10px] font-bold text-slate-500">Temperature</span>
-                        <span className="text-[10px] font-bold text-rose-500">{((selectedNode.data.temperature as number) ?? 70) / 100}</span>
+            </div>
+            {/* Search */}
+            <div className="relative">
+              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+              <input
+                type="text"
+                placeholder="搜索工具..."
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-[11px] outline-none focus:border-purple-400 font-medium transition-colors"
+                onChange={(e) => {
+                  const q = e.target.value.toLowerCase();
+                  const el = document.getElementById('tool-list-container');
+                  if (!el) return;
+                  el.querySelectorAll('[data-tool-name]').forEach((item: any) => {
+                    const name = item.dataset.toolName || '';
+                    const label = item.dataset.toolLabel || '';
+                    item.style.display = (!q || name.includes(q) || label.includes(q)) ? '' : 'none';
+                  });
+                }}
+              />
+            </div>
+          </div>
+          {/* Tool List */}
+          <div id="tool-list-container" className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+            {Object.entries(
+              BUILTIN_TOOLS.reduce((acc, tool) => {
+                (acc[tool.category] = acc[tool.category] || []).push(tool);
+                return acc;
+              }, {} as Record<string, BuiltinTool[]>)
+            ).map(([cat, tools]) => {
+              const catConfig = CATEGORY_ICONS[cat] || { icon: Cog, color: 'text-slate-500', bg: 'bg-slate-50' };
+              const CatIcon = catConfig.icon;
+              const catEnabledCount = tools.filter(t => enabledTools.has(t.name)).length;
+              return (
+                <div key={cat} className="mb-1">
+                  {/* Category Header */}
+                  <div className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1 rounded-md ${catConfig.bg}`}>
+                        <CatIcon size={10} className={catConfig.color} />
                       </div>
-                      <input type="range" min="0" max="100" value={((selectedNode.data.temperature as number) ?? 70)}
-                        onChange={(e) => updateNodeData(selectedNode.id, { temperature: Number(e.target.value) })}
-                        className="w-full accent-rose-500 h-1.5" />
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{cat}</span>
+                      <span className="text-[8px] text-slate-300 font-bold">{catEnabledCount}/{tools.length}</span>
                     </div>
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[10px] font-bold text-slate-500">Max Tokens</span>
-                        <span className="text-[10px] font-bold text-rose-500">{(selectedNode.data.maxTokens as number) || 2048}</span>
-                      </div>
-                      <input type="range" min="256" max="8192" step="256" value={((selectedNode.data.maxTokens as number) || 2048)}
-                        onChange={(e) => updateNodeData(selectedNode.id, { maxTokens: Number(e.target.value) })}
-                        className="w-full accent-rose-500 h-1.5" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[10px] font-bold text-slate-500">Top-P</span>
-                        <span className="text-[10px] font-bold text-rose-500">{((selectedNode.data.topP as number) ?? 90) / 100}</span>
-                      </div>
-                      <input type="range" min="0" max="100" value={((selectedNode.data.topP as number) ?? 90)}
-                        onChange={(e) => updateNodeData(selectedNode.id, { topP: Number(e.target.value) })}
-                        className="w-full accent-rose-500 h-1.5" />
-                    </div>
+                    <button
+                      onClick={() => {
+                        const catToolNames = tools.map(t => t.name);
+                        const allEnabled = catToolNames.every(n => enabledTools.has(n));
+                        setEnabledTools(prev => {
+                          const next = new Set(prev);
+                          catToolNames.forEach(n => allEnabled ? next.delete(n) : next.add(n));
+                          return next;
+                        });
+                      }}
+                      className="text-[8px] font-bold text-blue-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >{tools.every(t => enabledTools.has(t.name)) ? '取消' : '全选'}</button>
                   </div>
-                </div>
-                {/* Response options */}
-                <div className="p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
-                  <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-3">📨 响应设置</div>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-500 block mb-1">响应格式</span>
-                      <select value={(selectedNode.data.responseFormat as string) || 'text'}
-                        onChange={(e) => updateNodeData(selectedNode.id, { responseFormat: e.target.value })}
-                        className="w-full px-3 py-2 bg-white border border-rose-200 rounded-xl text-xs font-bold outline-none"
-                      >
-                        <option value="text">纯文本</option>
-                        <option value="markdown">Markdown</option>
-                        <option value="json">JSON 模式</option>
-                      </select>
-                    </div>
-                    <label className="flex items-center justify-between p-3 bg-white rounded-xl border border-rose-100 cursor-pointer">
-                      <span className="text-xs font-bold text-slate-700">流式输出</span>
-                      <div className="relative">
-                        <input type="checkbox" checked={!!selectedNode.data.streaming}
-                          onChange={(e) => updateNodeData(selectedNode.id, { streaming: e.target.checked })}
-                          className="sr-only peer" />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer-checked:bg-rose-500 transition-colors" />
-                        <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow peer-checked:translate-x-4 transition-transform" />
+                  {/* Tools in Category */}
+                  {tools.map(tool => (
+                    <label
+                      key={tool.name}
+                      data-tool-name={tool.name}
+                      data-tool-label={tool.label}
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer transition-all group/tool ${
+                        enabledTools.has(tool.name)
+                          ? 'bg-gradient-to-r from-purple-50/80 to-indigo-50/80 border border-purple-100'
+                          : 'hover:bg-slate-50 border border-transparent'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={enabledTools.has(tool.name)}
+                        onChange={() => {
+                          setEnabledTools(prev => {
+                            const next = new Set(prev);
+                            next.has(tool.name) ? next.delete(tool.name) : next.add(tool.name);
+                            return next;
+                          });
+                        }}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 accent-purple-600 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-bold text-slate-700 truncate group-hover/tool:text-purple-600 transition-colors">{tool.label}</div>
+                        <div className="text-[8px] text-slate-400 truncate">{tool.description}</div>
                       </div>
                     </label>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            )}
-
-            {selectedNode.type === 'agent-output' && (
-              <div className="space-y-4">
-                <div className="p-4 bg-teal-50 rounded-2xl border border-teal-100">
-                  <div className="text-[9px] font-black text-teal-500 uppercase tracking-widest mb-3">💬 输出方式</div>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'chat', label: '💬 对话显示', desc: '结果在聊天窗口展示' },
-                      { value: 'file', label: '📄 导出文件', desc: '自动保存为本地文件' },
-                      { value: 'clipboard', label: '📋 复制到剪贴板', desc: '结果自动复制' },
-                      { value: 'notify', label: '🔔 系统通知', desc: '完成后弹出通知' },
-                    ].map(opt => (
-                      <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        (selectedNode.data.outputMode as string) === opt.value || (!selectedNode.data.outputMode && opt.value === 'chat')
-                          ? 'bg-teal-100/50 border-teal-300 shadow-sm' : 'bg-white border-teal-100 hover:border-teal-300'
-                      }`}>
-                        <input type="radio" name="outputMode" value={opt.value}
-                          checked={(selectedNode.data.outputMode as string) === opt.value || (!selectedNode.data.outputMode && opt.value === 'chat')}
-                          onChange={() => updateNodeData(selectedNode.id, { outputMode: opt.value, detail: `输出: ${opt.label}` })}
-                          className="accent-teal-500 mt-0.5" />
-                        <div>
-                          <div className="text-xs font-bold text-slate-700">{opt.label}</div>
-                          <div className="text-[9px] text-slate-400">{opt.desc}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                {(selectedNode.data.outputMode as string) === 'file' && (
-                  <div className="p-4 bg-sky-50 rounded-2xl border border-sky-100 space-y-3">
-                    <div className="text-[9px] font-black text-sky-500 uppercase tracking-widest">📁 文件输出设置</div>
-                    <select value={(selectedNode.data.fileFormat as string) || 'txt'}
-                      onChange={(e) => updateNodeData(selectedNode.id, { fileFormat: e.target.value })}
-                      className="w-full px-3 py-2.5 bg-white border border-sky-200 rounded-xl text-xs font-bold outline-none">
-                      <option value="txt">.txt 文本文件</option>
-                      <option value="md">.md Markdown</option>
-                      <option value="json">.json JSON</option>
-                      <option value="csv">.csv 表格</option>
-                      <option value="py">.py Python</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <input type="text" value={(selectedNode.data.savePath as string) || ''}
-                        onChange={(e) => updateNodeData(selectedNode.id, { savePath: e.target.value })}
-                        className="flex-1 px-3 py-2.5 bg-white border border-sky-200 rounded-xl text-xs outline-none font-medium"
-                        placeholder="保存路径..." />
-                      <button
-                        onClick={async () => {
-                          try {
-                            const { save } = await import('@tauri-apps/plugin-dialog');
-                            const path = await save({ title: '选择保存位置' });
-                            if (path) updateNodeData(selectedNode.id, { savePath: path });
-                          } catch (e) { console.error(e); }
-                        }}
-                        className="px-3 py-2.5 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 active:scale-95 shrink-0"
-                      >浏览</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(selectedNode.type === 'agent-mcp' || selectedNode.type === 'agent-skill') && (
-              <div className="space-y-4">
-                <div className={`p-4 rounded-2xl border ${selectedNode.type === 'agent-mcp' ? 'bg-purple-50 border-purple-100' : 'bg-blue-50 border-blue-100'}`}>
-                  <div className={`text-[9px] font-black uppercase tracking-widest mb-3 ${selectedNode.type === 'agent-mcp' ? 'text-purple-500' : 'text-blue-500'}`}>
-                    {selectedNode.type === 'agent-mcp' ? '⚡ MCP Server 信息' : '📝 Skill 内容'}
-                  </div>
-                  <textarea
-                    rows={8}
-                    value={(selectedNode.data.detail as string) || ''}
-                    onChange={(e) => {
-                      const detail = e.target.value;
-                      setNodes(nds => nds.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, detail } } : n));
-                      setSelectedNode(prev => prev ? { ...prev, data: { ...prev.data, detail } } : null);
-                    }}
-                    className={`w-full px-4 py-3 bg-white border rounded-xl text-xs outline-none font-medium resize-none leading-relaxed ${selectedNode.type === 'agent-mcp' ? 'border-purple-200 focus:border-purple-500' : 'border-blue-200 focus:border-blue-500'}`}
-                    placeholder={selectedNode.type === 'agent-mcp' ? '描述此 MCP 提供的工具能力...' : '输入 Skill 提示词/知识内容...'}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Delete Node Button */}
-            <div className="pt-6 mt-6 border-t border-slate-100">
-              <button onClick={() => { setNodes(nds => nds.filter(n => n.id !== selectedNode.id)); setSelectedNode(null); }} className="w-full py-4 bg-red-50 text-red-500 rounded-xl text-xs font-black hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
-                <Trash2 size={14} /> 删除节点
-              </button>
-              <p className="text-[9px] text-slate-300 text-center mt-3 italic">提示：点击连线后按 Delete 键可删除连线</p>
-            </div>
+              );
+            })}
           </div>
-        ) : (
-          /* Default: Compile Preview */
-          <div className="p-6 overflow-y-auto">
-            <h3 className="font-black text-slate-800 text-lg tracking-tight mb-2">Agent 编译预览</h3>
-            <p className="text-[10px] text-slate-400 mb-6 leading-relaxed">点击节点编辑属性，或拖入新节点。连线到 LLM 节点完成组装。</p>
-            <div className="space-y-4">
-              {(() => {
-                const compiled = compileAgent();
-                return (
-                  <>
-                    <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                      <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2">LLM 模型</div>
-                      <div className="text-sm font-bold text-rose-700">{compiled.model || '未选择'}</div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                      <div className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-2">System Prompt</div>
-                      <pre className="text-[10px] text-blue-700 font-medium whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">{compiled.systemPrompt || '(空 - 请拖入 Skill/指令/文件节点并连线到 LLM)'}</pre>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
-                      <div className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-2">MCP 工具 ({compiled.tools.length})</div>
-                      {compiled.tools.length > 0 ? compiled.tools.map((t: any, i: number) => (
-                        <div key={i} className="text-[10px] text-purple-700 font-medium py-1">• {t.function.name}</div>
-                      )) : <div className="text-[10px] text-purple-300 italic">无 - 拖入 MCP 节点并连线到 LLM</div>}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
+          {/* Compile Preview Footer */}
+          <div className="shrink-0 border-t border-slate-100 p-4 bg-slate-50/50">
+            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">📊 编译摘要</div>
+            {(() => {
+              const compiled = compileAgent();
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-medium">模型</span>
+                    <span className="font-bold text-rose-600">{compiled.model || '未选择'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-medium">System Prompt</span>
+                    <span className="font-bold text-blue-600">{compiled.systemPrompt ? `${compiled.systemPrompt.length} 字` : '空'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-medium">MCP 工具</span>
+                    <span className="font-bold text-purple-600">{compiled.tools.length} 个</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 };
-
 // --- Agent Runner Modal ---
 const AgentRunnerModal = ({ agent, onClose }: { agent: AgentConfig; onClose: () => void }) => {
   const [messages, setMessages] = useState<{role: string; content: string; steps?: any[]}[]>([]);
@@ -1946,68 +1740,96 @@ const AgentRunnerModal = ({ agent, onClose }: { agent: AgentConfig; onClose: () 
 
 // --- Agent List Component ---
 const AgentList = ({ onCreateAgent, onOpenAgent, onRunAgent, agents, onDeleteAgent }: { onCreateAgent: () => void; onOpenAgent: (id: string) => void; onRunAgent: (id: string) => void; agents: AgentConfig[]; onDeleteAgent: (id: string) => void }) => (
-  <div className="p-12 max-w-5xl mx-auto animate-in fade-in duration-500">
-    <div className="flex items-center justify-between mb-12">
+  <div className="p-8 lg:p-12 w-full animate-in fade-in duration-500">
+    <div className="flex items-center justify-between mb-10">
       <div>
         <h2 className="text-3xl font-black text-slate-800 tracking-tighter">我的 Agent</h2>
         <p className="text-slate-400 mt-1 font-medium italic">配置 + 测试 + 运行你的智能代理</p>
       </div>
-      <button onClick={onCreateAgent} className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/30 hover:bg-blue-700 active:scale-95 transition-all">
+      <button onClick={onCreateAgent} className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-500/30 hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all">
         <Plus size={18} /> 创建 Agent
       </button>
     </div>
 
     {agents.length > 0 ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {agents.map(agent => (
-          <div key={agent.id} className="group bg-white border border-slate-200 rounded-[32px] p-8 hover:shadow-2xl hover:border-blue-400 transition-all relative">
-            <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-              <button onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }} className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-100 hover:text-red-600 transition-colors">
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <div className="flex items-center gap-4 mb-4 cursor-pointer" onClick={() => onOpenAgent(agent.id)}>
-              <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
-                <Bot size={28} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-black text-slate-800 text-xl tracking-tight">{agent.name}</h3>
-                <p className="text-[10px] text-slate-400 font-bold mt-1">{agent.description || '点击编辑配置'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">更新于 {new Date(agent.updatedAt).toLocaleDateString('zh-CN')}</span>
-            </div>
-            <div className="flex gap-2">
+          <div
+            key={agent.id}
+            className="group relative bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-3xl p-6 hover:shadow-[0_20px_60px_-15px_rgba(59,130,246,0.2)] hover:border-blue-300 transition-all duration-300 cursor-pointer overflow-hidden"
+            style={{ minHeight: '220px' }}
+          >
+            {/* Decorative gradient glow */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-gradient-to-tr from-violet-400/8 to-blue-400/8 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+            {/* Delete button */}
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
               <button
-                onClick={() => onRunAgent(agent.id)}
-                className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }}
+                className="p-2 bg-red-50/80 backdrop-blur-sm text-red-400 rounded-xl hover:bg-red-100 hover:text-red-600 transition-colors shadow-sm"
               >
-                <Play size={12} /> 运行
+                <Trash2 size={13} />
               </button>
-              <button
-                onClick={() => onOpenAgent(agent.id)}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:bg-slate-200 active:scale-95 transition-all"
-              >
-                <Edit3 size={12} /> 编辑
-              </button>
+            </div>
+
+            {/* Card content */}
+            <div className="relative z-[1]">
+              {/* Icon + Name */}
+              <div className="flex items-center gap-3.5 mb-5" onClick={() => onOpenAgent(agent.id)}>
+                <div className="p-3.5 bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 rounded-2xl shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 group-hover:scale-105 transition-all duration-300">
+                  <Bot size={22} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-slate-800 text-base tracking-tight truncate group-hover:text-blue-700 transition-colors duration-200">{agent.name}</h3>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">{agent.description || '点击编辑配置'}</p>
+                </div>
+              </div>
+
+              {/* Status bar */}
+              <div className="flex items-center gap-2 mb-5 px-3 py-2 bg-slate-50/80 rounded-xl">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                <span className="text-[10px] text-slate-400 font-bold">更新于 {new Date(agent.updatedAt).toLocaleDateString('zh-CN')}</span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRunAgent(agent.id); }}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all shadow-md shadow-blue-500/20"
+                >
+                  <Play size={12} /> 运行
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenAgent(agent.id); }}
+                  className="flex-1 py-2.5 bg-slate-100/80 text-slate-600 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:bg-slate-200 active:scale-95 transition-all"
+                >
+                  <Edit3 size={12} /> 编辑
+                </button>
+              </div>
             </div>
           </div>
         ))}
-        <div onClick={onCreateAgent} className="border-4 border-dashed border-slate-200 rounded-[32px] p-8 flex flex-col items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-500 hover:bg-white hover:shadow-xl transition-all cursor-pointer min-h-[200px]">
-          <Plus size={40} className="mb-4" />
+        {/* Create new card */}
+        <div
+          onClick={onCreateAgent}
+          className="border-2 border-dashed border-slate-200 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/30 hover:shadow-lg transition-all duration-300 cursor-pointer"
+          style={{ minHeight: '220px' }}
+        >
+          <div className="p-4 rounded-2xl border-2 border-dashed border-current mb-4 group-hover:rotate-90 transition-transform duration-500">
+            <Plus size={28} />
+          </div>
           <span className="font-black text-sm uppercase tracking-widest">新建 Agent</span>
         </div>
       </div>
     ) : (
       <div className="flex flex-col items-center justify-center py-32 text-center max-w-md mx-auto">
-        <div className="p-12 bg-white rounded-[48px] mb-10 shadow-xl">
+        <div className="p-12 bg-gradient-to-br from-white to-blue-50 rounded-[48px] mb-10 shadow-xl border border-slate-100">
           <Bot size={80} className="text-blue-500/20" />
         </div>
         <h3 className="text-3xl font-black text-slate-800 tracking-tighter mb-4">创建你的第一个 Agent</h3>
         <p className="text-slate-400 leading-relaxed font-medium">配置 AI 模型 + 系统指令 + 工具权限 + 输入文件，创建能执行复杂任务的 Agent。</p>
-        <button onClick={onCreateAgent} className="mt-10 px-10 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-2xl shadow-blue-500/40 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-3">
+        <button onClick={onCreateAgent} className="mt-10 px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black shadow-2xl shadow-blue-500/40 hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all flex items-center gap-3">
           <Plus size={20} /> 开始创建
         </button>
       </div>
@@ -2018,7 +1840,7 @@ const AgentList = ({ onCreateAgent, onOpenAgent, onRunAgent, agents, onDeleteAge
 const SKILLS_CACHE_KEY = 'openclaw_installed_skills';
 
 const AbilityManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('market');
+  const [activeTab, setActiveTab] = useState<TabType>('agent');
   const [mySkills, setMySkills] = useState<SkillItem[]>(() => {
     try {
       const cached = localStorage.getItem(SKILLS_CACHE_KEY);
@@ -2084,9 +1906,9 @@ const AbilityManager: React.FC = () => {
   };
 
   const tabs = [
+    { id: 'agent', label: 'Agent', icon: Bot, desc: '创建智能代理' },
     { id: 'market', label: '技能市场', icon: Globe, desc: '发现社群流行技能' },
     { id: 'library', label: '我的库', icon: Library, desc: '管理本地与已安装' },
-    { id: 'agent', label: 'Agent', icon: Bot, desc: '创建智能代理' },
   ];
 
   return (

@@ -2,17 +2,28 @@
 // Agent Runtime v2 — Modular Architecture
 // ═══════════════════════════════════════════════
 
+pub mod agent_factory;
+pub mod agent_registry;
+pub mod context_manager;
+pub mod cost_tracker;
 pub mod executor;
+pub mod experience;
+pub mod failure_analyzer;
 pub mod memory;
 pub mod planner;
 pub mod prompt_builder;
 pub mod reflection;
+pub mod stop_judge;
+pub mod task_structurer;
+pub mod template_engine;
+pub mod tool_knowledge;
+pub mod tool_policy;
 pub mod tool_runtime;
 pub mod types;
 
 use crate::ai::resolve_ai_config;
 use crate::db::DbPool;
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 use types::*;
 use crate::app_log;
@@ -127,8 +138,9 @@ pub async fn agent_run(
         new_id
     };
 
-    // Ensure v2 tables
+    // Ensure v2 tables + experience table
     memory::ensure_v2_tables(&*pool).await;
+    experience::ensure_experience_table(&*pool).await;
 
     // Build tools list (filtered by enabled_tools, always exclude ai_chat which is a no-op)
     let all_tools = tool_runtime::get_builtin_tools();
@@ -147,27 +159,48 @@ pub async fn agent_run(
         tools = all_tools.into_iter().filter(|t| t.function.name != "ai_chat").collect();
     }
 
-    // Build system prompt
+    // Build enhanced system prompt
     let mut system_prompt = req.system_prompt.unwrap_or_else(|| {
-        concat!(
-            "你是一个自动执行任务的 AI Agent，运行在 Windows 操作系统上。\n",
-            "你的工作方式：分析任务 -> 立即调用工具执行 -> 报告结果。\n\n",
-            "## 绝对禁止\n",
-            "- 禁止使用 ai_chat 工具 — 它没有任何执行能力\n",
-            "- 不要生成代码让用户去执行，你必须自己用工具完成\n",
-            "- 不要请求用户确认或提供更多信息\n",
-            "- 不要描述你打算做什么，直接调用工具\n",
-            "- 不要使用 Linux 命令或 Linux 路径\n\n",
-            "## 必须遵守\n",
-            "- 直接调用工具来完成任务，不要犹豫\n",
-            "- 获取网络内容（天气、新闻等）→ 用 browser_navigate\n",
-            "- 执行命令/脚本 → 用 shell_run（PowerShell语法）\n",
-            "- 发送邮件 → 用 shell_run 执行 PowerShell Send-MailMessage\n",
-            "- 读写文件 → 用 file_read / file_write\n",
-            "- 使用 Windows 风格路径\n",
-            "- 每步完成后简要报告结果\n\n",
-            "完成任务后，给出清晰的最终总结。"
-        ).into()
+        r#"你是一个高效的任务执行 AI Agent，运行在 Windows 操作系统上。
+
+## 核心原则
+你必须通过调用工具来完成任务。收到指令后，立即分析并调用最合适的工具。绝不要返回文本描述来替代工具调用。
+
+## 绝对禁止
+- ❌ 禁止使用 ai_chat 工具
+- ❌ 不要返回文本回复来替代工具调用
+- ❌ 不要生成代码让用户去执行
+- ❌ 不要请求用户确认
+- ❌ 不要使用 Linux 命令或路径格式
+
+## 工具选择规则
+| 任务类型 | 使用工具 |
+|---------|--------|
+| 读取文件 | file_read |
+| 写入/创建文件 | file_write |
+| 列出目录文件 | file_list |
+| 搜索文件内容 | file_search |
+| 读取 Excel | excel_read |
+| 写入 Excel | excel_write |
+| 分析 Excel 数据 | excel_analyze |
+| CSV 转 Excel | csv_to_excel |
+| 合并多文件 | data_merge |
+| 表格转换清洗 | table_transform |
+| 读取 PDF | pdf_read |
+| 生成 Word 报告 | report_generate |
+| 网络爬取/新闻/天气 | web_scrape（首选）|
+| 执行命令/安装包 | shell_run (PowerShell) |
+| JSON 处理 | json_process |
+
+## 路径规范
+- 使用 Windows 绝对路径: C:\Users\...
+- 用户提供的文件路径是可信的，直接使用
+
+## 执行要求
+1. 收到步骤指令后，立即调用工具
+2. 使用上方指南选择正确的工具
+3. 利用前一步骤的结果作为本步骤的输入
+4. 工具执行完成后简要报告结果"#.into()
     });
 
     // Inject real user environment info
@@ -193,10 +226,39 @@ pub async fn agent_run(
         },
     );
 
-    // ── Layer 2: Task Planning ──
+    // ── Layer 2: Task Structuring (v3) ──
     let goal = req.goal.as_deref().unwrap_or(&req.prompt).to_string();
 
-    // Build tool descriptions for planner awareness
+    // Structurize the task: intent classification + tool filtering
+    let structured_task = task_structurer::structurize_task(&goal, &llm, &client).await
+        .unwrap_or_else(|_| StructuredTask {
+            goal: goal.clone(),
+            intent: TaskIntent::Unknown,
+            keywords: vec![],
+            inputs: vec![],
+            expected_output: "文本输出".into(),
+            required_tools: vec![],
+            complexity: TaskComplexity::Medium,
+        });
+    let agent_config = task_structurer::build_agent_config(&structured_task);
+    app_log!("AGENT", "Task structured: intent={:?}, tools={}, role={}",
+        structured_task.intent, structured_task.required_tools.len(), agent_config.role.name);
+
+    // Filter tools by structured task recommendation (if available)
+    if !structured_task.required_tools.is_empty() {
+        let recommended = &structured_task.required_tools;
+        let filtered: Vec<ToolDef> = tools.iter()
+            .filter(|t| recommended.contains(&t.function.name))
+            .cloned()
+            .collect();
+        if !filtered.is_empty() {
+            app_log!("AGENT", "Tools filtered: {} → {} (by intent {:?})",
+                tools.len(), filtered.len(), structured_task.intent);
+            tools = filtered;
+        }
+    }
+
+    // Build tool descriptions for planner
     let tool_descriptions: String = tools
         .iter()
         .map(|t| format!("- `{}`: {}", t.function.name, t.function.description))
@@ -204,10 +266,12 @@ pub async fn agent_run(
         .join("\n");
 
     app_log!("AGENT", "tools count: {}", tools.len());
-    app_log!("AGENT", "tool_descriptions:\n{}", &tool_descriptions);
-    app_log!("AGENT", "Calling planner::generate_plan...");
+    app_log!("AGENT", "Calling planner v3 (experience-aware)...");
 
-    let plan = match planner::generate_plan(&llm, &client, &goal, &tool_descriptions).await {
+    let plan = match planner::generate_plan_with_experience(
+        &llm, &client, &goal, &tool_descriptions,
+        &*pool, &structured_task.intent, &structured_task.keywords,
+    ).await {
         Ok(p) => {
             app_log!("AGENT", "Plan generated: {} steps", p.steps.len());
             for s in &p.steps {
@@ -217,7 +281,6 @@ pub async fn agent_run(
         }
         Err(e) => {
             app_log!("AGENT", "Plan generation FAILED: {}", e);
-            // Fallback: single step plan
             AgentPlan {
                 steps: vec![PlanStep {
                     id: 1,
@@ -297,15 +360,52 @@ pub async fn agent_run(
         messages,
     };
 
-    // ── Layer 3: Step-based Execution Loop ──
+    // ── Layer 3: Step-based Execution Loop (v3: with stop_judge) ──
     let mut plan_steps = plan.steps;
     let max_replan = 2u32;
     let mut replan_count = 0u32;
+    let cost_budget = CostBudget::default();
+    let execution_start = std::time::Instant::now();
+    let mut tools_used: Vec<String> = Vec::new();
+    let mut consecutive_failures: u32 = 0;
 
     let mut step_idx = 0;
     while step_idx < plan_steps.len() {
-        let mut step = plan_steps[step_idx].clone();
+        // ── Stop Judge check before each step ──
+        let stop_decision = stop_judge::evaluate(
+            ctx.completed_steps.len(),
+            plan_steps.len(),
+            consecutive_failures,
+            ctx.failure_count,
+            &cost_budget,
+            execution_start.elapsed().as_secs(),
+        );
+        match stop_decision {
+            StopDecision::StopSuccess(reason) => {
+                app_log!("AGENT", "STOP_JUDGE: Success - {}", reason);
+                break;
+            }
+            StopDecision::StopFailure(reason) => {
+                app_log!("AGENT", "STOP_JUDGE: Failure - {}", reason);
+                let stop_step = AgentStep {
+                    round: step_idx as u32,
+                    step_type: "stop".into(),
+                    tool_name: None, tool_args: None, tool_result: None,
+                    content: Some(format!("⛔ 终止: {}", reason)),
+                    duration_ms: None,
+                };
+                let _ = app_handle.emit("agent-event", AgentEvent {
+                    event_type: "stop".into(),
+                    step: Some(stop_step.clone()),
+                    message: Some(reason),
+                });
+                steps_log.push(stop_step);
+                break;
+            }
+            StopDecision::Continue => {}
+        }
 
+        let mut step = plan_steps[step_idx].clone();
         app_log!("AGENT", "--- Executing step {} / {}: {} ---", step.id, plan_steps.len(), step.task);
 
         let result = executor::execute_step(
@@ -325,8 +425,15 @@ pub async fn agent_run(
                 step.status = StepStatus::Done;
                 step.result = Some(output);
                 ctx.completed_steps.push(step.clone());
+                consecutive_failures = 0;  // Reset on success
 
-                // Save step result
+                // Track tools used
+                if let Some(hint) = prompt_builder::extract_tool_hint(&step.task) {
+                    if !tools_used.contains(&hint) {
+                        tools_used.push(hint);
+                    }
+                }
+
                 memory::save_step_result(&*pool, &task_id, &step).await;
                 memory::update_task_status(
                     &*pool,
@@ -342,6 +449,7 @@ pub async fn agent_run(
             Err(err) => {
                 step.status = StepStatus::Failed;
                 ctx.failure_count += 1;
+                consecutive_failures += 1;
 
                 // Save failed step
                 memory::save_step_result(&*pool, &task_id, &step).await;
@@ -404,11 +512,49 @@ pub async fn agent_run(
         }
     }
 
-    // ── Finalize ──
+    // ── Finalize: LLM-generated intelligent summary ──
     let final_answer = if ctx.completed_steps.is_empty() {
         "Agent 未能完成任何步骤".to_string()
     } else {
-        memory::summarize_results(&ctx.completed_steps)
+        // Try to get LLM-generated summary
+        let summary_prompt = prompt_builder::build_summary_prompt(&goal, &ctx.completed_steps);
+        let summary_result: Option<String> = async {
+            let payload = json!({
+                "model": llm.model_name,
+                "messages": [
+                    {"role": "system", "content": "你是一个任务总结助手。用中文简洁地总结任务执行结果。"},
+                    {"role": "user", "content": summary_prompt}
+                ],
+                "temperature": 0.3
+            });
+            let mut req_builder = client.post(&llm.endpoint).json(&payload);
+            if !llm.api_key.is_empty() {
+                req_builder = req_builder.header("Authorization", format!("Bearer {}", llm.api_key));
+            }
+            match req_builder.send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(json_resp) = resp.json::<Value>().await {
+                        json_resp["choices"][0]["message"]["content"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }.await;
+
+        match summary_result {
+            Some(summary) => {
+                app_log!("AGENT", "LLM summary generated: {} chars", summary.len());
+                summary
+            }
+            None => {
+                app_log!("AGENT", "LLM summary failed, falling back to mechanical summary");
+                memory::summarize_results(&ctx.completed_steps)
+            }
+        }
     };
 
     // Emit done
@@ -451,6 +597,34 @@ pub async fn agent_run(
     )
     .await;
 
+    // ── v3: Write experience to learning system ──
+    let score = experience::score_execution(
+        &ctx.completed_steps,
+        plan_steps.len(),
+        ctx.failure_count,
+        &tools_used,
+        &structured_task.required_tools,
+    );
+    let plan_json = serde_json::to_string(&plan_steps).unwrap_or_default();
+    let exp = Experience {
+        id: uuid::Uuid::new_v4().to_string(),
+        task_summary: goal.clone(),
+        intent: structured_task.intent.clone(),
+        plan_json,
+        tools_used: tools_used.clone(),
+        success: !ctx.completed_steps.is_empty(),
+        score: score.clone(),
+        failure_reason: if ctx.failure_count > 0 {
+            Some(format!("{}次失败", ctx.failure_count))
+        } else {
+            None
+        },
+        created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+    };
+    experience::save_experience(&*pool, &exp).await;
+    app_log!("AGENT", "Experience saved: accuracy={}, efficiency={}, tool_usage={}",
+        score.accuracy, score.efficiency, score.tool_usage);
+
     Ok(AgentRunResult {
         success: !ctx.completed_steps.is_empty(),
         final_answer,
@@ -459,3 +633,133 @@ pub async fn agent_run(
         error: None,
     })
 }
+
+// ═══════════════════════════════════════════════
+// Product Layer — Blueprint CRUD Commands
+// ═══════════════════════════════════════════════
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct BlueprintInfo {
+    pub id: String,
+    pub name: String,
+    pub persona: String,
+    pub goal_template: String,
+    pub tool_count: usize,
+    pub workflow_steps: usize,
+    pub version: String,
+    pub created_at: String,
+}
+
+impl From<AgentBlueprint> for BlueprintInfo {
+    fn from(bp: AgentBlueprint) -> Self {
+        BlueprintInfo {
+            id: bp.id.clone(),
+            name: bp.name.clone(),
+            persona: bp.persona.clone(),
+            goal_template: bp.goal_template.clone(),
+            tool_count: bp.tool_scope.included.len(),
+            workflow_steps: bp.workflow_template.len(),
+            version: bp.version.clone(),
+            created_at: bp.created_at.clone(),
+        }
+    }
+}
+
+/// Create a new Agent Blueprint from description
+#[tauri::command]
+pub async fn agent_create_blueprint(
+    pool: State<'_, DbPool>,
+    description: String,
+    model_config_id: Option<String>,
+) -> Result<BlueprintInfo, String> {
+    crate::logger::init();
+    app_log!("AGENT", "Creating blueprint: {}", description);
+
+    let config = if let Some(ref config_id) = model_config_id {
+        sqlx::query_as::<_, crate::ai::AiConfig>(
+            "SELECT id, name, provider, api_key, base_url, model_name, is_active, purpose FROM ai_configs WHERE id = ?"
+        ).bind(config_id).fetch_one(&*pool).await
+            .map_err(|e| format!("找不到模型配置: {}", e))?
+    } else {
+        match resolve_ai_config(&*pool, Some("agent")).await {
+            Ok(cfg) => cfg,
+            Err(_) => resolve_ai_config(&*pool, None).await
+                .map_err(|e| format!("无可用模型: {}", e))?,
+        }
+    };
+
+    let url = config.base_url.clone()
+        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+    let is_local = url.contains("localhost") || url.contains("127.0.0.1");
+    let llm = LlmConfig {
+        endpoint: format!("{}/chat/completions", url.trim_end_matches('/')),
+        api_key: config.api_key.clone().unwrap_or_default(),
+        model_name: config.model_name.clone(),
+        is_local,
+    };
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    agent_registry::ensure_registry_table(&*pool).await;
+
+    let bp = agent_factory::create_blueprint(&description, &llm, &client).await?;
+    agent_registry::save_blueprint(&*pool, &bp).await;
+
+    Ok(BlueprintInfo::from(bp))
+}
+
+/// List all saved blueprints
+#[tauri::command]
+pub async fn agent_list_blueprints(
+    pool: State<'_, DbPool>,
+) -> Result<Vec<BlueprintInfo>, String> {
+    agent_registry::ensure_registry_table(&*pool).await;
+    let bps = agent_registry::list_blueprints(&*pool).await;
+    Ok(bps.into_iter().map(BlueprintInfo::from).collect())
+}
+
+/// Delete a blueprint
+#[tauri::command]
+pub async fn agent_delete_blueprint(
+    pool: State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    agent_registry::delete_blueprint(&*pool, &id).await;
+    Ok(())
+}
+
+/// List recent experiences
+#[tauri::command]
+pub async fn agent_list_experiences(
+    pool: State<'_, DbPool>,
+    limit: Option<u32>,
+) -> Result<Vec<serde_json::Value>, String> {
+    experience::ensure_experience_table(&*pool).await;
+    let rows = sqlx::query_as::<_, (String, String, String, i32, i32, i32, i32, String)>(
+        "SELECT id, task_summary, intent, success,
+                score_accuracy, score_efficiency, score_tool_usage, created_at
+         FROM agent_experiences
+         ORDER BY created_at DESC
+         LIMIT ?"
+    )
+    .bind(limit.unwrap_or(20) as i64)
+    .fetch_all(&*pool)
+    .await
+    .unwrap_or_default();
+
+    let results: Vec<serde_json::Value> = rows.iter().map(|r| {
+        serde_json::json!({
+            "id": r.0,
+            "task_summary": r.1,
+            "intent": r.2,
+            "success": r.3 != 0,
+            "score": { "accuracy": r.4, "efficiency": r.5, "tool_usage": r.6 },
+            "created_at": r.7,
+        })
+    }).collect();
+
+    Ok(results)
+}
+

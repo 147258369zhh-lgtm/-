@@ -4,11 +4,11 @@ use tauri::{AppHandle, Emitter};
 use crate::app_log;
 
 // ═══════════════════════════════════════════════
-// Step Executor — executes PlanSteps via LLM + tools
+// Step Executor v2.0 — Enhanced Context + Smart Retry
 // ═══════════════════════════════════════════════
 
 /// Execute a single plan step using LLM with tool calling
-/// Returns the step result text, and mutates messages in place
+/// v2: Enhanced step context, smart retry, better tool guidance
 pub async fn execute_step(
     ctx: &mut AgentContext,
     step: &mut PlanStep,
@@ -38,14 +38,43 @@ pub async fn execute_step(
     });
     steps_log.push(step_event);
 
-    // Build step-specific instruction — list available tools explicitly
+    // ── Build enhanced step instruction ──
+    // Include previous step results for data flow continuity
+    let prev_context = if !ctx.completed_steps.is_empty() {
+        let last_step = ctx.completed_steps.last().unwrap();
+        let result_preview = last_step.result.as_deref().unwrap_or("");
+        let truncated = if result_preview.len() > 1500 {
+            format!("{}...(截断)", &result_preview[..1500])
+        } else {
+            result_preview.to_string()
+        };
+        format!(
+            "\n## 上一步结果（供参考）\n步骤 {}: {}\n结果: {}\n",
+            last_step.id, last_step.task, truncated
+        )
+    } else {
+        String::new()
+    };
+
+    // Extract tool hint from step description
+    let tool_hint = super::prompt_builder::extract_tool_hint(&step.task);
+    let tool_guidance = if let Some(ref hint) = tool_hint {
+        format!(
+            "\n**你必须调用 `{}` 工具来完成此步骤。** 不要使用其他工具。不要返回文本回复。立即调用 `{}`。\n",
+            hint, hint
+        )
+    } else {
+        "\n你必须调用一个工具来完成此步骤。不要返回文本回复。立即调用工具。\n".to_string()
+    };
+
     let tool_names: Vec<String> = ctx.tools.iter().map(|t| t.function.name.clone()).collect();
     let step_instruction = format!(
-        "Execute step {}: {}\n\n\
-         Available tools: {}\n\
-         You MUST call one of these tool functions to complete this step. \
-         Do NOT write text or code. Call a tool function NOW.",
-        step.id, step.task, tool_names.join(", ")
+        "## 执行指令\n执行步骤 {step_id}: {step_task}\n{prev_context}{tool_guidance}\n可用工具: {tools}",
+        step_id = step.id,
+        step_task = step.task,
+        prev_context = prev_context,
+        tool_guidance = tool_guidance,
+        tools = tool_names.join(", ")
     );
     ctx.messages.push(json!({"role": "user", "content": step_instruction}));
 
@@ -56,35 +85,27 @@ pub async fn execute_step(
         .map(|t| serde_json::to_value(t).unwrap())
         .collect();
 
-    // Multi-turn tool loop for this step (max 5 tool rounds per step)
+    // Multi-turn tool loop for this step (max 6 tool rounds per step)
     let mut step_result = String::new();
     let mut text_retry_count = 0u32;
+    let max_text_retries = 2u32;
+    let mut tool_fail_count = 0u32;  // Per-step tool failure counter
+    let max_tool_failures = 2u32;    // Max 2 failures per step, then force-skip
 
-    for _tool_round in 0..10 {
-        // Sliding window: keep system prompt + last N messages to prevent token overflow
-        if ctx.messages.len() > 20 {
-            let system_msg = ctx.messages[0].clone();
-            let keep_count = 12;
-            let start = ctx.messages.len() - keep_count;
-            let recent: Vec<Value> = ctx.messages[start..].to_vec();
-            ctx.messages = vec![system_msg];
-            ctx.messages.extend(recent);
-            app_log!("EXECUTOR", "[step {}] Messages trimmed to {} (was > 20)", step.id, ctx.messages.len());
-        }
+    for _tool_round in 0..6 {
+        // ── Context compression via context_manager ──
+        super::context_manager::compress_messages(&mut ctx.messages);
         app_log!("EXECUTOR", "[step {}] tool_round={}, messages_count={}, tools_count={}", step.id, _tool_round, ctx.messages.len(), tools_json.len());
 
-        // Force tool calling on first round; allow auto after tools have been called
-        // NOTE: "required" is NOT supported by SiliconFlow API (returns 50507 error)
-        // So we use "auto" and enforce via prompt instead
         let mut payload = json!({
             "model": llm.model_name,
             "messages": ctx.messages,
-            "temperature": 0.1
+            "temperature": 0.05
         });
-        // Only include tools if we have them
         if !tools_json.is_empty() {
             payload["tools"] = json!(tools_json);
-            payload["tool_choice"] = json!("auto");
+            // v3: Force tool calling — agent MUST call a tool, no lazy text responses
+            payload["tool_choice"] = json!("required");
         }
 
         let start = std::time::Instant::now();
@@ -100,7 +121,7 @@ pub async fn execute_step(
 
         if !resp.status().is_success() {
             let body = resp.text().await.unwrap_or_default();
-            app_log!("EXECUTOR", "[step {}] LLM ERROR status={}, body={}", step.id, "fail", &body[..body.len().min(1000)]);
+            app_log!("EXECUTOR", "[step {}] LLM ERROR body={}", step.id, &body[..body.len().min(1000)]);
             return Err(format!("LLM 响应错误: {}", body));
         }
 
@@ -114,11 +135,12 @@ pub async fn execute_step(
         let finish_reason = json_resp["choices"][0]["finish_reason"].as_str().unwrap_or("unknown");
         let has_tool_calls = message["tool_calls"].is_array();
         let msg_content = message["content"].as_str().unwrap_or("");
-        app_log!("EXECUTOR", "[step {}] LLM response: finish_reason={}, has_tool_calls={}, content_len={}, elapsed={}ms", step.id, finish_reason, has_tool_calls, msg_content.len(), elapsed);
+        app_log!("EXECUTOR", "[step {}] LLM: finish={}, tools={}, content_len={}, {}ms", step.id, finish_reason, has_tool_calls, msg_content.len(), elapsed);
 
         if let Some(tool_calls) = message["tool_calls"].as_array() {
-            // LLM wants to call tools
+            // LLM wants to call tools — process them
             ctx.messages.push(message.clone());
+            text_retry_count = 0; // Reset retry counter on successful tool call
 
             for tc in tool_calls {
                 let tc_id = tc["id"].as_str().unwrap_or("").to_string();
@@ -127,7 +149,7 @@ pub async fn execute_step(
                 let args_str = func["arguments"].as_str().unwrap_or("{}");
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
-                app_log!("EXECUTOR", "[step {}] TOOL CALL: {} args={}", step.id, tool_name, &args_str[..args_str.len().min(500)]);
+                app_log!("EXECUTOR", "[step {}] TOOL: {} args={}", step.id, tool_name, &args_str[..args_str.len().min(500)]);
 
                 // Emit tool_call event
                 let call_step = AgentStep {
@@ -164,20 +186,20 @@ pub async fn execute_step(
                     step_type: "tool_result".into(),
                     tool_name: Some(tool_name.to_string()),
                     tool_args: None,
-                    tool_result: Some(result_str.clone()),
+                    tool_result: Some(if result_str.len() > 500 { format!("{}...", &result_str[..500]) } else { result_str.clone() }),
                     content: None,
                     duration_ms: Some(tool_elapsed),
                 };
                 let _ = app_handle.emit("agent-event", AgentEvent {
                     event_type: "tool_result".into(),
                     step: Some(result_step.clone()),
-                    message: Some(format!("{} 完成", tool_name)),
+                    message: Some(format!("{} {}", tool_name, if tool_success { "✅" } else { "❌" })),
                 });
                 steps_log.push(result_step);
 
-                // Append tool result to messages (truncate if too large)
-                let truncated_result = if result_str.len() > 8000 {
-                    format!("{}...\n\n[结果已截断，原始长度: {} 字符]", &result_str[..8000], result_str.len())
+                // Truncate large results for message context
+                let truncated_result = if result_str.len() > 6000 {
+                    format!("{}...\n\n[结果已截断，原始长度: {} 字符]", &result_str[..6000], result_str.len())
                 } else {
                     result_str.clone()
                 };
@@ -191,8 +213,35 @@ pub async fn execute_step(
                 super::memory::save_memory(pool, &ctx.task_id, step.id, "tool", Some(&result_str), Some(&tc_id), Some(tool_name)).await;
 
                 if !tool_success {
-                    // Inject reflection
-                    let reflection_msg = super::reflection::build_reflection_message(tool_name, &result_str);
+                    tool_fail_count += 1;
+
+                    // ── CRITICAL: Stop retrying after max failures ──
+                    if tool_fail_count >= max_tool_failures {
+                        app_log!("EXECUTOR", "[step {}] Tool {} failed {} times, force-skipping step", step.id, tool_name, tool_fail_count);
+                        let skip_msg = format!("⛔ 工具 `{}` 连续失败 {} 次，跳过此步骤。错误: {}", tool_name, tool_fail_count, &result_str[..result_str.len().min(200)]);
+                        let skip_step = AgentStep {
+                            round: step.id,
+                            step_type: "reflection".into(),
+                            tool_name: Some(tool_name.to_string()),
+                            tool_args: None,
+                            tool_result: None,
+                            content: Some(skip_msg.clone()),
+                            duration_ms: None,
+                        };
+                        let _ = app_handle.emit("agent-event", AgentEvent {
+                            event_type: "reflection".into(),
+                            step: Some(skip_step.clone()),
+                            message: Some(format!("跳过步骤: {} 连续失败", tool_name)),
+                        });
+                        steps_log.push(skip_step);
+                        ctx.failure_count += 1;
+                        step_result = format!("步骤失败: {}", result_str);
+                        // Break out of the tool loop — this step is done (failed)
+                        return Err(format!("工具 {} 连续失败 {} 次: {}", tool_name, tool_fail_count, &result_str[..result_str.len().min(300)]));
+                    }
+
+                    // First failure: inject smart reflection and retry once
+                    let reflection_msg = super::reflection::build_smart_reflection(tool_name, &result_str, &step.task);
                     ctx.messages.push(json!({"role": "system", "content": reflection_msg}));
 
                     let refl_step = AgentStep {
@@ -201,7 +250,7 @@ pub async fn execute_step(
                         tool_name: Some(tool_name.to_string()),
                         tool_args: None,
                         tool_result: None,
-                        content: Some("分析失败原因...".into()),
+                        content: Some(format!("分析 {} 失败原因（{}/{}次）...", tool_name, tool_fail_count, max_tool_failures)),
                         duration_ms: None,
                     };
                     let _ = app_handle.emit("agent-event", AgentEvent {
@@ -221,21 +270,37 @@ pub async fn execute_step(
             continue;
         }
 
-        // No tool calls -- LLM gave a text response
+        // ── No tool calls — LLM gave text response ──
         let content = message["content"].as_str().unwrap_or("").to_string();
 
-        // If first round and LLM didn't call tools, retry with stronger prompt (max 2 retries)
-        if _tool_round == 0 && text_retry_count < 2 && !tools_json.is_empty() {
+        // Smart retry: if we have tools and LLM isn't calling them
+        if text_retry_count < max_text_retries && !tools_json.is_empty() {
             text_retry_count += 1;
-            app_log!("EXECUTOR", "[step {}] LLM returned text instead of tool_calls, retry #{}", step.id, text_retry_count);
-            ctx.messages.push(json!({
-                "role": "user",
-                "content": "You MUST call a tool function. Do NOT respond with text. Call one of the available tool functions NOW."
-            }));
+
+            let retry_msg = if let Some(ref hint) = tool_hint {
+                // We know which tool should be used — be very specific
+                format!(
+                    "⚠️ 你必须调用 `{}` 工具。不要返回文本回复。\n\n请立即调用 `{}` 工具，参数如下：\n{}",
+                    hint, hint,
+                    get_tool_usage_example(hint)
+                )
+            } else if _tool_round == 0 {
+                format!(
+                    "⚠️ 你必须通过调用工具来完成此任务。不要返回文本。\n\n\
+                     可用工具: {}\n\n\
+                     请选择最合适的工具并立即调用。",
+                    tool_names.join(", ")
+                )
+            } else {
+                "你必须调用工具函数完成此步骤。直接调用工具，不要回复文本。".to_string()
+            };
+
+            app_log!("EXECUTOR", "[step {}] LLM returned text, smart retry #{} (hint={:?})", step.id, text_retry_count, tool_hint);
+            ctx.messages.push(json!({"role": "user", "content": retry_msg}));
             continue;
         }
 
-        // Accept text response (step done)
+        // Accept text response if we've exhausted retries or this is a summarization step
         let done_step = AgentStep {
             round: step.id,
             step_type: "step_done".into(),
@@ -248,16 +313,44 @@ pub async fn execute_step(
         let _ = app_handle.emit("agent-event", AgentEvent {
             event_type: "step_done".into(),
             step: Some(done_step.clone()),
-            message: Some(format!("step {} done", step.id)),
+            message: Some(format!("步骤 {} 完成", step.id)),
         });
         steps_log.push(done_step);
 
         ctx.messages.push(json!({"role": "assistant", "content": content}));
         super::memory::save_memory(pool, &ctx.task_id, step.id, "assistant", Some(&content), None, None).await;
 
-        step_result = content;
+        // Use text content as step result if we don't have a tool result
+        if step_result.is_empty() {
+            step_result = content;
+        }
         break;
     }
 
     Ok(step_result)
+}
+
+/// Provide a tool-specific usage example for the retry prompt
+fn get_tool_usage_example(tool_name: &str) -> String {
+    match tool_name {
+        "web_scrape" => r#"调用示例: web_scrape({"url": "https://news.sina.com.cn", "selector": "h3,a"})"#.into(),
+        "file_read" => r#"调用示例: file_read({"path": "C:\\Users\\...\\file.txt"})"#.into(),
+        "file_write" => r#"调用示例: file_write({"path": "C:\\Users\\...\\output.txt", "content": "内容"})"#.into(),
+        "file_list" => r#"调用示例: file_list({"path": "C:\\Users\\...\\folder"})"#.into(),
+        "excel_read" => r#"调用示例: excel_read({"path": "C:\\Users\\...\\data.xlsx"})"#.into(),
+        "excel_write" => r#"调用示例: excel_write({"path": "C:\\...\\out.xlsx", "data": "[{\"col1\":\"val1\"}]"})"#.into(),
+        "excel_analyze" => r#"调用示例: excel_analyze({"path": "C:\\...\\data.xlsx", "analysis": "统计每列的非空数量"})"#.into(),
+        "browser_navigate" => r#"调用示例: browser_navigate({"url": "https://www.example.com"})"#.into(),
+        "shell_run" => r#"调用示例: shell_run({"command": "Get-Date"})"#.into(),
+        "data_merge" => r#"调用示例: data_merge({"input_paths": "C:\\a.csv;C:\\b.csv", "output_path": "C:\\merged.xlsx"})"#.into(),
+        "csv_to_excel" => r#"调用示例: csv_to_excel({"input_path": "C:\\data.csv", "output_path": "C:\\data.xlsx"})"#.into(),
+        "pdf_read" => r#"调用示例: pdf_read({"path": "C:\\...\\doc.pdf"})"#.into(),
+        "json_process" => r#"调用示例: json_process({"input": "{\"key\":\"value\"}", "operation": "format"})"#.into(),
+        "report_generate" => r#"调用示例: report_generate({"code": "from docx import Document; ...", "output_path": "C:\\report.docx"})"#.into(),
+        "chart_generate" => r#"调用示例: chart_generate({"code": "import matplotlib.pyplot as plt; ...", "output_path": "C:\\chart.png"})"#.into(),
+        "translate_text" => r#"调用示例: translate_text({"text": "Hello world", "target_lang": "zh"})"#.into(),
+        "image_process" => r#"调用示例: image_process({"code": "from PIL import Image; ..."})"#.into(),
+        "qrcode_generate" => r#"调用示例: qrcode_generate({"data": "https://example.com", "output_path": "C:\\qr.png"})"#.into(),
+        _ => format!("请立即调用 {} 工具，使用正确的参数格式。", tool_name),
+    }
 }
