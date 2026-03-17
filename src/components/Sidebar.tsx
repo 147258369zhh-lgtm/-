@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderKanban, FileText, Settings, Database, ChevronLeft, ChevronRight, PlaneTakeoff, Zap, Bot } from 'lucide-react';
+import { FolderKanban, FileText, Settings, Database, ChevronLeft, ChevronRight, PlaneTakeoff, Zap } from 'lucide-react';
 
 interface SidebarProps {
     activeTab: string;
@@ -9,8 +9,7 @@ interface SidebarProps {
 
 const navItems = [
     { id: 'projects', label: '项目管理', icon: FolderKanban },
-    { id: 'ability', label: 'AI 技能中心', icon: Zap },
-    { id: 'agents', label: 'Agent 中心', icon: Bot },
+    { id: 'aihub', label: 'AI HUB', icon: Zap },
     { id: 'templates', label: '全局模板', icon: FileText },
     { id: 'travel', label: '差旅管理', icon: PlaneTakeoff },
     { id: 'common', label: '通用信息', icon: Database },

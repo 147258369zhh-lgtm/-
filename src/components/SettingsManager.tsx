@@ -1,14 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Moon, Sun, FolderOpen, RefreshCcw, ShieldCheck, Database, HardDrive, MonitorPlay, Zap, Cloud, Cpu, Trash2, Droplets } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Moon, Sun, FolderOpen, RefreshCcw, ShieldCheck, Database, HardDrive, MonitorPlay, Zap, Cloud, Cpu, Trash2, Droplets, Search, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTemplateStore } from '../store/useTemplateStore';
+import TokenMonitor from './TokenMonitor';
 
 export const SettingsManager: React.FC = () => {
     const { theme, setTheme } = useStore();
     const { templates } = useTemplateStore();
     const [settings, setSettings] = useState<{ key: string, value: string }[]>([]);
+
+    // ── 响应式缩放：窗口小于设计宽度时按比例缩小 ──
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [scale, setScale] = useState(1);
+    const DESIGN_WIDTH = 1200; // 设计基准宽度
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const w = entry.contentRect.width;
+                setScale(w < DESIGN_WIDTH ? w / DESIGN_WIDTH : 1);
+            }
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
     const [aiConfigs, setAiConfigs] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'system' | 'ai'>('system');
@@ -196,23 +215,59 @@ export const SettingsManager: React.FC = () => {
 
 
     return (
-        <div className="custom-scrollbar animate-in fade-in duration-500" style={{ flex: 1, overflowY: 'auto', padding: '40px 40px', backgroundColor: 'var(--bg-surface)' }}>
-            {/* Header & Tabs */}
-            <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div ref={containerRef} className="custom-scrollbar animate-in fade-in duration-500" style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-surface)', overflow: 'auto' }}>
+        <div style={{
+            transform: scale < 1 ? `scale(${scale})` : undefined,
+            transformOrigin: 'top left',
+            width: scale < 1 ? `${100 / scale}%` : '100%',
+            padding: '28px clamp(16px, 3vw, 40px)',
+        }}>
+            {/* Header */}
+            <div style={{ marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h2 style={{ margin: '0 0 6px', fontSize: 36, fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 14, letterSpacing: '-0.02em' }}>
-                        <Settings style={{ color: 'var(--brand)' }} size={32} />
+                    <h2 style={{ margin: '0 0 4px', fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 12, letterSpacing: '-0.02em' }}>
+                        <Settings style={{ color: 'var(--brand)' }} size={26} />
                         系统与 AI 设置
                     </h2>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Global Application Configuration & AI Engines</p>
-                </div>
-                <div style={{ display: 'flex', backgroundColor: 'var(--bg-muted)', padding: 6, borderRadius: 16, border: '1px solid var(--border)' }}>
-                    <button onClick={() => setActiveTab('system')} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', backgroundColor: activeTab === 'system' ? 'var(--bg-surface)' : 'transparent', color: activeTab === 'system' ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: '0.2s', boxShadow: activeTab === 'system' ? 'var(--shadow-sm)' : 'none' }}>运行与维护</button>
-                    <button onClick={() => setActiveTab('ai')} style={{ padding: '8px 20px', borderRadius: 12, border: 'none', backgroundColor: activeTab === 'ai' ? 'var(--bg-surface)' : 'transparent', color: activeTab === 'ai' ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: '0.2s', boxShadow: activeTab === 'ai' ? 'var(--shadow-sm)' : 'none' }}>AI 模型引擎库</button>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Global Application Configuration & AI Engines</p>
                 </div>
             </div>
 
-            <div style={{ maxWidth: 860, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* 三栏布局 */}
+            <div style={{ display: 'grid', gridTemplateColumns: activeTab === 'ai' ? '160px 1fr 380px' : '160px 1fr', gap: 24, alignItems: 'start' }}>
+
+                {/* ═══ 左栏：竖向导航 ═══ */}
+                <div style={{
+                    position: 'sticky', top: 20,
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                    backgroundColor: 'var(--bg-raised)', borderRadius: 16,
+                    border: '1px solid var(--border)', padding: 8,
+                }}>
+                    {[
+                        { key: 'system' as const, icon: <MonitorPlay size={16} />, label: '运行与维护' },
+                        { key: 'ai' as const, icon: <Cpu size={16} />, label: 'AI 模型引擎' },
+                    ].map(item => (
+                        <button key={item.key} onClick={() => setActiveTab(item.key)} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 14px', borderRadius: 12, border: 'none',
+                            backgroundColor: activeTab === item.key ? 'var(--brand-subtle)' : 'transparent',
+                            color: activeTab === item.key ? 'var(--brand)' : 'var(--text-muted)',
+                            fontWeight: activeTab === item.key ? 800 : 600,
+                            fontSize: 13, cursor: 'pointer', width: '100%', textAlign: 'left',
+                            transition: 'all 0.15s',
+                            boxShadow: activeTab === item.key ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                        }}>
+                            {item.icon}
+                            {item.label}
+                        </button>
+                    ))}
+                    {/* 分隔线 + 未来子项占位 */}
+                    <div style={{ height: 1, backgroundColor: 'var(--border)', margin: '4px 8px' }} />
+                    <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, letterSpacing: '0.1em' }}>更多功能</div>
+                </div>
+
+                {/* ═══ 中间：内容区 ═══ */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
                 {activeTab === 'system' && (
                     <>
                         {/* Appearance */}
@@ -487,6 +542,18 @@ export const SettingsManager: React.FC = () => {
                             const localConfigs = aiConfigs.filter(c => c.purpose === 'local');
                             const onlineConfigs = aiConfigs.filter(c => c.purpose === 'online' || c.purpose === 'core_chat');
                             const hasActiveEngine = aiConfigs.some(c => c.is_active);
+                            const handleDisconnectAll = async () => {
+                                try {
+                                    // 把所有激活配置设为非激活
+                                    for (const c of aiConfigs.filter(x => x.is_active)) {
+                                        await invoke('upsert_ai_config', { config: { ...c, is_active: false } });
+                                    }
+                                    // 清除模块路由
+                                    await invoke('update_setting', { key: 'ai_route_chat', value: '' });
+                                    await invoke('update_setting', { key: 'ai_route_scheme', value: '' });
+                                    loadData();
+                                } catch (e) { alert(`断开失败: ${e}`); }
+                            };
 
                             return (
                                 <>
@@ -502,11 +569,21 @@ export const SettingsManager: React.FC = () => {
                                             backgroundColor: hasActiveEngine ? '#22c55e' : 'var(--border-strong)',
                                             boxShadow: hasActiveEngine ? '0 0 10px rgba(34,197,94,0.6)' : 'none',
                                         }} />
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: hasActiveEngine ? '#16a34a' : 'var(--text-muted)' }}>
+                                        <span style={{ fontSize: 13, fontWeight: 700, color: hasActiveEngine ? '#16a34a' : 'var(--text-muted)', flex: 1 }}>
                                             {hasActiveEngine
-                                                ? `引擎在线 · ${aiConfigs.filter(c => c.is_active).map(c => c.name).join(', ')}`
+                                                ? `引擎在线 · ${aiConfigs.filter(c => c.is_active).map(c => `${c.name} · ${c.model_name}`).join(', ')}`
                                                 : '所有引擎离线 · 请连接至少一个模型'}
                                         </span>
+                                        {hasActiveEngine && (
+                                            <button onClick={handleDisconnectAll} style={{
+                                                padding: '5px 14px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)',
+                                                backgroundColor: 'rgba(239,68,68,0.06)', color: '#ef4444',
+                                                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', gap: 4,
+                                            }}>
+                                                <X size={12} /> 断开
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* ══ Section 1: LOCAL MODELS ══ */}
@@ -1027,19 +1104,19 @@ export const SettingsManager: React.FC = () => {
                                             backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
                                             zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }} onClick={e => { if (e.target === e.currentTarget) { setEditAiId(null); setFetchedModels([]); } }}>
-                                            <div className="animate-in fade-in zoom-in-95" style={{
-                                                width: '90%', maxWidth: 560,
-                                                padding: 28, borderRadius: 20,
+                                            <div className="animate-in fade-in zoom-in-95 custom-scrollbar" style={{
+                                                width: '92%', maxWidth: 820,
+                                                padding: '32px 36px', borderRadius: 24,
                                                 backgroundColor: 'var(--bg-raised)',
                                                 border: '1.5px solid var(--brand)',
                                                 boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-                                                maxHeight: '85vh', overflowY: 'auto',
+                                                maxHeight: '90vh', overflowY: 'auto',
                                             }} onClick={e => e.stopPropagation()}>
-                                                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                    <Zap size={20} style={{ color: 'var(--brand)' }} />
+                                                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                    <Zap size={22} style={{ color: 'var(--brand)' }} />
                                                     {editAiId.startsWith('new_') ? '添加引擎' : '编辑引擎'}
                                                 </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                                     <div style={{ gridColumn: '1 / -1' }}>
                                                         <label style={S.label}>显示名称</label>
                                                         <input value={aiForm.name || ''} onChange={e => setAiForm({ ...aiForm, name: e.target.value })} style={S.input} placeholder="例如：本地 Ollama 或 DeepSeek" />
@@ -1056,48 +1133,90 @@ export const SettingsManager: React.FC = () => {
                                                         <label style={S.label}>安全秘钥 (API KEY)</label>
                                                         <input value={aiForm.api_key || ''} onChange={e => setAiForm({ ...aiForm, api_key: e.target.value })} style={S.input} placeholder="本地模型可留白" type="password" />
                                                     </div>
-                                                    <div>
+                                                    <div style={{ gridColumn: '1 / -1' }}>
                                                         <label style={S.label}>API Base URL</label>
                                                         <input value={aiForm.base_url || ''} onChange={e => setAiForm({ ...aiForm, base_url: e.target.value })} style={S.input} placeholder="http://127.0.0.1:11434/v1" />
                                                     </div>
-                                                    <div>
-                                                        <label style={S.label}>模型名</label>
-                                                        <div style={{ display: 'flex', gap: 8 }}>
-                                                            <div style={{ flex: 1, position: 'relative' }}>
-                                                                <input value={aiForm.model_name || ''} onChange={e => setAiForm({ ...aiForm, model_name: e.target.value })} style={S.input} placeholder="如 qwen2.5-7b" />
-                                                                {fetchedModels.length > 0 && (
-                                                                    <div className="custom-scrollbar" style={{
-                                                                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                                                                        marginTop: 4, backgroundColor: 'var(--bg-raised)', border: '1.5px solid var(--border)',
-                                                                        borderRadius: 12, maxHeight: 160, overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
-                                                                    }}>
-                                                                        {fetchedModels.map(name => (
-                                                                            <div key={name}
-                                                                                onClick={() => { setAiForm({ ...aiForm, model_name: name }); setFetchedModels([]); }}
-                                                                                style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}
-                                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--brand-subtle)'}
-                                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                                            >{name}</div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                    {/* 模型选择区 - 占满整行 */}
+                                                    <div style={{ gridColumn: '1 / -1' }}>
+                                                        <label style={S.label}>模型名 {fetchedModels.length > 0 && <span style={{ color: 'var(--brand)', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>· {fetchedModels.length} 个可用</span>}</label>
+                                                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                                            <input value={aiForm.model_name || ''} onChange={e => setAiForm({ ...aiForm, model_name: e.target.value })} style={{ ...S.input, flex: 1 }} placeholder="如 deepseek-ai/DeepSeek-V3 或点击右侧获取列表" />
                                                             <button onClick={async () => {
                                                                 if (!aiForm.base_url) { alert('请先填写 API 地址'); return; }
                                                                 setIsFetchingModels(true);
                                                                 try {
                                                                     const models: string[] = await invoke('fetch_ai_models', { baseUrl: aiForm.base_url, apiKey: aiForm.api_key });
                                                                     setFetchedModels(models);
+                                                                    if (models.length === 0) alert('未获取到模型列表，该服务可能不支持 /models 端点。');
                                                                 } catch (e) { alert(`获取模型失败: ${e}`); }
                                                                 finally { setIsFetchingModels(false); }
-                                                            }} disabled={isFetchingModels} style={{ width: 42, flexShrink: 0, borderRadius: 12, border: '1.5px solid var(--border)', backgroundColor: 'var(--bg-muted)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                <RefreshCcw size={14} className={isFetchingModels ? 'spin' : ''} />
+                                                            }} disabled={isFetchingModels} title="从服务器获取可用模型列表" style={{
+                                                                padding: '0 18px', flexShrink: 0, borderRadius: 12,
+                                                                border: '1.5px solid var(--border)',
+                                                                backgroundColor: isFetchingModels ? 'var(--bg-muted)' : 'var(--brand-subtle)',
+                                                                color: 'var(--brand)', cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                                                                fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                                                            }}>
+                                                                <RefreshCcw size={13} className={isFetchingModels ? 'spin' : ''} />
+                                                                {isFetchingModels ? '获取中...' : '获取列表'}
                                                             </button>
                                                         </div>
                                                         {aiForm.provider === 'openai' && (
-                                                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                                 <input type="checkbox" id="autoDetect" checked={aiForm.model_name === '__auto_detect__'} onChange={e => setAiForm({ ...aiForm, model_name: e.target.checked ? '__auto_detect__' : '' })} style={{ width: 14, height: 14, cursor: 'pointer' }} />
                                                                 <label htmlFor="autoDetect" style={{ fontSize: 11, fontWeight: 700, color: 'var(--brand)', cursor: 'pointer' }}>随动模式 (自动识别服务器当前模型)</label>
+                                                            </div>
+                                                        )}
+                                                        {/* 模型列表 - 内嵌展示，非悬浮 */}
+                                                        {fetchedModels.length > 0 && (
+                                                            <div data-model-container="1" style={{
+                                                                border: '1.5px solid var(--border)', borderRadius: 14,
+                                                                backgroundColor: 'var(--bg-surface)', overflow: 'hidden',
+                                                            }}>
+                                                                {/* 搜索栏 */}
+                                                                <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'var(--bg-muted)' }}>
+                                                                    <Search size={13} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                                                                    <input
+                                                                        placeholder={`搜索 ${fetchedModels.length} 个模型...`}
+                                                                        onChange={e => {
+                                                                            const q = e.target.value.toLowerCase();
+                                                                            e.target.closest('[data-model-container]')?.querySelectorAll('[data-model-item]').forEach((el: any) => {
+                                                                                el.style.display = el.dataset.modelItem.toLowerCase().includes(q) ? '' : 'none';
+                                                                            });
+                                                                        }}
+                                                                        style={{ flex: 1, border: 'none', outline: 'none', fontSize: 12, backgroundColor: 'transparent', color: 'var(--text-primary)' }}
+                                                                    />
+                                                                    <button onClick={() => setFetchedModels([])} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: 2 }}>
+                                                                        <X size={13} />
+                                                                    </button>
+                                                                </div>
+                                                                {/* 模型网格 */}
+                                                                <div className="custom-scrollbar" style={{ maxHeight: 360, overflowY: 'auto', padding: '6px 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                                                                    {fetchedModels.map(name => (
+                                                                        <div key={name}
+                                                                            data-model-item={name}
+                                                                            onClick={() => { setAiForm({ ...aiForm, model_name: name }); setFetchedModels([]); }}
+                                                                            style={{
+                                                                                padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                                                                                fontSize: 11, fontFamily: 'monospace',
+                                                                                color: name === aiForm.model_name ? 'var(--brand)' : 'var(--text-secondary)',
+                                                                                fontWeight: name === aiForm.model_name ? 700 : 400,
+                                                                                backgroundColor: name === aiForm.model_name ? 'var(--brand-subtle)' : 'transparent',
+                                                                                border: name === aiForm.model_name ? '1px solid var(--brand)' : '1px solid transparent',
+                                                                                transition: 'all 0.12s',
+                                                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                                                overflow: 'hidden',
+                                                                            }}
+                                                                            onMouseEnter={e => { if (name !== aiForm.model_name) { e.currentTarget.style.backgroundColor = 'var(--bg-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; } }}
+                                                                            onMouseLeave={e => { if (name !== aiForm.model_name) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; } }}
+                                                                        >
+                                                                            <span style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0, backgroundColor: name === aiForm.model_name ? 'var(--brand)' : 'var(--border)' }} />
+                                                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={name}>{name}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1154,6 +1273,16 @@ export const SettingsManager: React.FC = () => {
                     GO-TONGX Build v2024.03.11
                 </p>
             </div>
+
+            {/* ═══ 右栏：Token 监控（仅 AI tab 显示） ═══ */}
+            {activeTab === 'ai' && (
+                <div style={{ minWidth: 0, position: 'sticky', top: 20 }}>
+                    <TokenMonitor />
+                </div>
+            )}
+
+            </div>
+        </div>
         </div>
     );
 };

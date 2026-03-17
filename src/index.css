@@ -323,6 +323,16 @@ html, body {
 .duration-300 { animation-duration: 0.3s; }
 .duration-500 { animation-duration: 0.5s; }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* ─────────────────────────────────────────
    Liquid Glass theme — iOS 26 glass effects
    Applied when html has class 'glass'

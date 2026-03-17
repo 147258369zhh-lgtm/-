@@ -232,14 +232,16 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
             tool_type: "function".into(),
             function: ToolFunction {
                 name: "excel_write".into(),
-                description: "使用 Pandas 创建或写入 Excel 文件。支持多 Sheet、数据筛选、合并、排序等高级操作。".into(),
+                description: "创建 Excel 文件（.xlsx）。传入表头和数据行即可，无需写代码。".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "code": { "type": "string", "description": "Python 代码（可使用 pandas as pd、openpyxl）。代码必须生成输出文件。示例：df = pd.DataFrame({'列A': [1,2], '列B': [3,4]}); df.to_excel('output.xlsx', index=False)" },
-                        "output_path": { "type": "string", "description": "输出 Excel 文件的绝对路径" }
+                        "headers": { "type": "string", "description": "列名，用逗号分隔。例如：'姓名,年龄,城市'" },
+                        "rows": { "type": "string", "description": "数据行，每行用逗号分隔，行之间用 ||| 分隔。例如：'张三,25,北京|||李四,30,上海'" },
+                        "output_path": { "type": "string", "description": "输出 Excel 文件的绝对路径" },
+                        "sheet_name": { "type": "string", "description": "工作表名称（默认 Sheet1）" }
                     },
-                    "required": ["code", "output_path"]
+                    "required": ["headers", "output_path"]
                 }),
             },
         },
@@ -261,14 +263,15 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
             tool_type: "function".into(),
             function: ToolFunction {
                 name: "word_write".into(),
-                description: "创建或修改 Word 文档（.docx）。支持添加标题、段落、表格、图片。".into(),
+                description: "创建 Word 文档（.docx）。传入标题和内容即可，无需写代码。".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "code": { "type": "string", "description": "Python 代码（可使用 docx 库）。代码必须生成 .docx 文件。示例：from docx import Document; doc = Document(); doc.add_heading('标题'); doc.save('output.docx')" },
-                        "output_path": { "type": "string", "description": "输出 Word 文件的绝对路径" }
+                        "title": { "type": "string", "description": "文档标题" },
+                        "content": { "type": "string", "description": "文档正文内容。支持用 \\n 换行分段。" },
+                        "output_path": { "type": "string", "description": "输出 Word 文件的绝对路径，如 C:\\Users\\用户名\\Desktop\\report.docx" }
                     },
-                    "required": ["code", "output_path"]
+                    "required": ["title", "content", "output_path"]
                 }),
             },
         },
@@ -290,14 +293,15 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
             tool_type: "function".into(),
             function: ToolFunction {
                 name: "ppt_create".into(),
-                description: "创建 PowerPoint（.pptx）演示文稿。支持添加幻灯片、标题、内容、图片、表格。".into(),
+                description: "创建 PowerPoint 演示文稿（.pptx）。传入标题和每页内容即可。".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "code": { "type": "string", "description": "Python 代码（可使用 pptx 库）。代码必须生成 .pptx 文件。示例：from pptx import Presentation; prs = Presentation(); slide = prs.slides.add_slide(prs.slide_layouts[0]); slide.shapes.title.text='标题'; prs.save('output.pptx')" },
+                        "title": { "type": "string", "description": "演示文稿总标题" },
+                        "slides": { "type": "string", "description": "每页内容，用 ||| 分隔。每页格式为：标题::内容。例如：'封面页::公司简介|||市场分析::市场规模达100亿|||总结::谢谢观看'" },
                         "output_path": { "type": "string", "description": "输出 PPT 文件的绝对路径" }
                     },
-                    "required": ["code", "output_path"]
+                    "required": ["title", "slides", "output_path"]
                 }),
             },
         },
@@ -573,12 +577,73 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
                 }),
             },
         },
+        // ── High-level utility tools (Phase 3 fix) ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "date_now".into(),
+                description: "获取当前日期和时间。可指定格式。返回格式化后的日期时间字符串。不需要 shell_run，直接调用即可。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "format": { "type": "string", "description": "日期格式，默认 '%Y-%m-%d_%H-%M-%S'。常用：'%Y年%m月%d日'、'%Y-%m-%d %H:%M:%S'、'%Y%m%d'" }
+                    },
+                    "required": []
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_create".into(),
+                description: "创建一个新的 Excel 文件（.xlsx）。只需指定保存路径和文件名，可选添加表头。适合创建空白或带表头的 Excel 文件。不需要写代码。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "filename": { "type": "string", "description": "文件名（含 .xlsx 后缀），如 '2026-03-18_报告.xlsx'" },
+                        "save_dir": { "type": "string", "description": "保存目录，如 'C:\\Users\\29136\\Desktop'" },
+                        "headers": { "type": "string", "description": "可选表头，逗号分隔，如 '姓名,年龄,城市'" },
+                        "sheet_name": { "type": "string", "description": "工作表名称，默认 'Sheet1'" }
+                    },
+                    "required": ["filename", "save_dir"]
+                }),
+            },
+        },
     ]
 }
 
 // ═══════════════════════════════════════════════
 // Tool Executor
 // ═══════════════════════════════════════════════
+
+/// 统一 Python 脚本执行器 —— 写临时文件再执行，彻底消灭路径转义问题
+async fn run_python_script(script: &str) -> Result<String, String> {
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("agent_tool_{}.py", uuid::Uuid::new_v4().simple()));
+    
+    tokio::fs::write(&script_path, script)
+        .await
+        .map_err(|e| format!("写入临时脚本失败: {}", e))?;
+    
+    let output = tokio::process::Command::new("python")
+        .arg(&script_path)
+        .output()
+        .await
+        .map_err(|e| format!("执行 Python 失败（请确保已安装 Python）: {}", e));
+    
+    // 清理临时文件
+    let _ = tokio::fs::remove_file(&script_path).await;
+    
+    let output = output?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Err(format!("{}{}", stderr.trim(), if stdout.trim().is_empty() { String::new() } else { format!("\nstdout: {}", stdout.trim()) }))
+    }
+}
+
 
 fn validate_path(path: &str, allowed_paths: &Option<Vec<String>>) -> Result<(), String> {
     if let Some(allowed) = allowed_paths {
@@ -673,7 +738,14 @@ pub async fn execute_tool(
         }
     }
 
-    let result = execute_tool_inner(tool_name, arguments, pool, app_handle).await;
+    // Global timeout: no tool should run longer than 30 seconds
+    let result = match tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        execute_tool_inner(tool_name, arguments, pool, app_handle)
+    ).await {
+        Ok(r) => r,
+        Err(_) => Err(format!("工具 {} 执行超时（30秒），已自动终止", tool_name)),
+    };
 
     let (result_str, success) = match &result {
         Ok(s) => (s.as_str(), true),
@@ -718,22 +790,20 @@ async fn execute_tool_inner(
             let max_rows = arguments["max_rows"].as_u64().unwrap_or(50);
             let sheet_arg = arguments["sheet"].as_str().unwrap_or("");
 
-            // Use Python to read Excel — this is the most reliable cross-platform approach
             let sheet_clause = if sheet_arg.is_empty() {
-                "wb.active".to_string()
+                "ws = wb.active".to_string()
             } else {
-                format!("wb['{}']", sheet_arg)
+                format!("ws = wb['{}']", sheet_arg)
             };
 
-            let python_script = format!(
-                r#"
-import openpyxl, sys
+            let script = format!(
+                r#"import openpyxl, sys
 try:
-    wb = openpyxl.load_workbook('{}', read_only=True, data_only=True)
-    ws = {}
+    wb = openpyxl.load_workbook(r'{path}', read_only=True, data_only=True)
+    {sheet}
     rows = []
     for i, row in enumerate(ws.iter_rows(values_only=True)):
-        if i >= {}:
+        if i >= {max_rows}:
             break
         rows.append('\t'.join([str(c) if c is not None else '' for c in row]))
     print('\n'.join(rows))
@@ -741,27 +811,14 @@ except Exception as e:
     print(f'ERROR: {{e}}', file=sys.stderr)
     sys.exit(1)
 "#,
-                path.replace('\\', "\\\\").replace('\'', "\\'"),
-                sheet_clause,
-                max_rows
+                path = path, sheet = sheet_clause, max_rows = max_rows
             );
 
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &python_script])
-                .output()
-                .await
-                .map_err(|e| format!("执行 Python 失败（请确保已安装 Python 和 openpyxl）: {}", e))?;
-
-            if output.status.success() {
-                let content = String::from_utf8_lossy(&output.stdout).to_string();
-                if content.len() > 15000 {
-                    Ok(format!("{}...\n\n[Excel 内容已截断，共 {} 字符]", &content[..15000], content.len()))
-                } else {
-                    Ok(content)
-                }
+            let result = run_python_script(&script).await?;
+            if result.len() > 15000 {
+                Ok(format!("{}...\n\n[Excel 内容已截断，共 {} 字符]", &result[..15000], result.len()))
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(format!("读取 Excel 失败: {}", stderr))
+                Ok(result)
             }
         }
 
@@ -1388,37 +1445,180 @@ const {{ chromium }} = require('playwright');
             }
         }
 
-        // ── Office Document Tools (Python-based) ──
+        // ── High-level utility tools (Phase 3 fix) ──
 
-        "excel_write" | "word_write" | "ppt_create" => {
-            let code = arguments["code"]
+        "date_now" => {
+            let fmt = arguments["format"]
                 .as_str()
-                .ok_or(format!("{}: missing code", tool_name))?;
+                .unwrap_or("%Y-%m-%d_%H-%M-%S");
+            let now = chrono::Local::now();
+            let formatted = now.format(fmt).to_string();
+            Ok(formatted)
+        }
+
+        "excel_create" => {
+            let filename = arguments["filename"]
+                .as_str()
+                .ok_or("excel_create: missing filename")?;
+            let save_dir = arguments["save_dir"]
+                .as_str()
+                .ok_or("excel_create: missing save_dir")?;
+            let headers = arguments["headers"].as_str().unwrap_or("");
+            let sheet_name = arguments["sheet_name"].as_str().unwrap_or("Sheet1");
+            let full_path = std::path::Path::new(save_dir).join(filename);
+            let full_path_str = full_path.to_string_lossy();
+
+            if let Some(parent) = full_path.parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+
+            let script = format!(
+                r#"import openpyxl, os
+path = r'{path}'
+os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = '{sheet}'
+headers = '{headers}'
+if headers:
+    ws.append([h.strip() for h in headers.split(',')])
+wb.save(path)
+print(f'Excel 文件已创建: {{path}}')
+"#,
+                path = full_path_str, sheet = sheet_name, headers = headers
+            );
+            let result = run_python_script(&script).await?;
+            Ok(format!("Excel 文件已创建: {}\n{}", full_path_str, result.trim()))
+        }
+
+        // ── Office Document Tools (Python-based, all via run_python_script) ──
+
+        "excel_write" => {
+            let headers_str = arguments["headers"]
+                .as_str()
+                .unwrap_or("");
+            let rows_str = arguments["rows"]
+                .as_str()
+                .unwrap_or("");
             let output_path = arguments["output_path"]
                 .as_str()
-                .ok_or(format!("{}: missing output_path", tool_name))?;
+                .ok_or("excel_write: missing output_path")?;
+            let sheet_name = arguments["sheet_name"].as_str().unwrap_or("Sheet1");
 
             if let Some(parent) = std::path::Path::new(output_path).parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
 
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", code])
-                .output()
-                .await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
+            let script = format!(
+                r#"import openpyxl, os
+path = r'{path}'
+os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = '{sheet}'
+headers = '{headers}'
+if headers:
+    ws.append([h.strip() for h in headers.split(',')])
+rows_str = '''{rows}'''
+if rows_str:
+    for row_line in rows_str.split('|||'):
+        row_line = row_line.strip()
+        if row_line:
+            ws.append([c.strip() for c in row_line.split(',')])
+wb.save(path)
+print(f'Excel 文件已创建: {{path}}')
+"#,
+                path = output_path, sheet = sheet_name,
+                headers = headers_str, rows = rows_str
+            );
+            let result = run_python_script(&script).await?;
+            Ok(format!("Excel 文件已创建: {}\n{}", output_path, result.trim()))
+        }
 
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                if tokio::fs::metadata(output_path).await.is_ok() {
-                    Ok(format!("文件已生成: {}\n{}", output_path, stdout.trim()))
-                } else {
-                    Ok(format!("Python 执行成功但未检测到输出文件。stdout: {}", stdout.trim()))
-                }
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(format!("{} 执行失败:\n{}", tool_name, stderr.trim()))
+        "word_write" => {
+            let title = arguments["title"]
+                .as_str()
+                .unwrap_or("文档");
+            let content = arguments["content"]
+                .as_str()
+                .unwrap_or("");
+            let output_path = arguments["output_path"]
+                .as_str()
+                .ok_or("word_write: missing output_path")?;
+
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
             }
+
+            let script = format!(
+                r#"from docx import Document
+import os
+path = r'{path}'
+os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+doc = Document()
+doc.add_heading('''{title}''', level=0)
+content = '''{content}'''
+for para in content.split('\n'):
+    para = para.strip()
+    if para:
+        doc.add_paragraph(para)
+doc.save(path)
+print(f'Word 文档已创建: {{path}}')
+"#,
+                path = output_path, title = title, content = content
+            );
+            let result = run_python_script(&script).await?;
+            Ok(format!("Word 文档已创建: {}\n{}", output_path, result.trim()))
+        }
+
+        "ppt_create" => {
+            let title = arguments["title"]
+                .as_str()
+                .unwrap_or("演示文稿");
+            let slides_str = arguments["slides"]
+                .as_str()
+                .unwrap_or("");
+            let output_path = arguments["output_path"]
+                .as_str()
+                .ok_or("ppt_create: missing output_path")?;
+
+            if let Some(parent) = std::path::Path::new(output_path).parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+
+            let script = format!(
+                r#"from pptx import Presentation
+from pptx.util import Inches, Pt
+import os
+path = r'{path}'
+os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+prs = Presentation()
+title_layout = prs.slide_layouts[0]
+slide = prs.slides.add_slide(title_layout)
+slide.shapes.title.text = '''{title}'''
+if len(slide.placeholders) > 1:
+    slide.placeholders[1].text = ''
+slides_data = '''{slides}'''
+if slides_data:
+    for slide_str in slides_data.split('|||'):
+        slide_str = slide_str.strip()
+        if not slide_str:
+            continue
+        parts = slide_str.split('::', 1)
+        s_title = parts[0].strip()
+        s_body = parts[1].strip() if len(parts) > 1 else ''
+        content_layout = prs.slide_layouts[1]
+        s = prs.slides.add_slide(content_layout)
+        s.shapes.title.text = s_title
+        if len(s.placeholders) > 1:
+            s.placeholders[1].text = s_body
+prs.save(path)
+print(f'PPT 已创建: {{path}}')
+"#,
+                path = output_path, title = title, slides = slides_str
+            );
+            let result = run_python_script(&script).await?;
+            Ok(format!("PPT 已创建: {}\n{}", output_path, result.trim()))
         }
 
         "word_read" => {
@@ -1426,17 +1626,26 @@ const {{ chromium }} = require('playwright');
                 .as_str()
                 .ok_or("word_read: missing path")?;
             let script = format!(
-                "import docx,sys\ntry:\n doc=docx.Document('{}')\n lines=[]\n for p in doc.paragraphs:\n  if p.text.strip(): lines.append(f'[{{p.style.name}}] {{p.text}}')\n for t in doc.tables:\n  lines.append('\\n--- 表格 ---')\n  for r in t.rows: lines.append('\\t'.join([c.text.strip() for c in r.cells]))\n o='\\n'.join(lines)\n print(o[:15000]+'\\n...(已截断)' if len(o)>15000 else o)\nexcept Exception as e: print(f'ERROR: {{e}}',file=sys.stderr);sys.exit(1)",
-                path.replace('\\', "\\\\").replace('\'', "\\'")
+                r#"import docx, sys
+try:
+    doc = docx.Document(r'{path}')
+    lines = []
+    for p in doc.paragraphs:
+        if p.text.strip():
+            lines.append(f'[{{p.style.name}}] {{p.text}}')
+    for t in doc.tables:
+        lines.append('\n--- 表格 ---')
+        for r in t.rows:
+            lines.append('\t'.join([c.text.strip() for c in r.cells]))
+    o = '\n'.join(lines)
+    print(o[:15000] + '\n...(已截断)' if len(o) > 15000 else o)
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#,
+                path = path
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).to_string())
-            } else {
-                Err(format!("读取 Word 失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            run_python_script(&script).await
         }
 
         "ppt_read" => {
@@ -1444,17 +1653,28 @@ const {{ chromium }} = require('playwright');
                 .as_str()
                 .ok_or("ppt_read: missing path")?;
             let script = format!(
-                "from pptx import Presentation\nimport sys\ntry:\n prs=Presentation('{}')\n lines=[]\n for i,s in enumerate(prs.slides,1):\n  lines.append(f'\\n=== 第 {{i}} 页 ===')\n  for sh in s.shapes:\n   if hasattr(sh,'text') and sh.text.strip(): lines.append(sh.text)\n   if sh.has_table:\n    for r in sh.table.rows: lines.append('\\t'.join([c.text.strip() for c in r.cells]))\n o='\\n'.join(lines)\n print(o[:15000]+'\\n...(已截断)' if len(o)>15000 else o)\nexcept Exception as e: print(f'ERROR: {{e}}',file=sys.stderr);sys.exit(1)",
-                path.replace('\\', "\\\\").replace('\'', "\\'")
+                r#"from pptx import Presentation
+import sys
+try:
+    prs = Presentation(r'{path}')
+    lines = []
+    for i, s in enumerate(prs.slides, 1):
+        lines.append(f'\n=== 第 {{i}} 页 ===')
+        for sh in s.shapes:
+            if hasattr(sh, 'text') and sh.text.strip():
+                lines.append(sh.text)
+            if sh.has_table:
+                for r in sh.table.rows:
+                    lines.append('\t'.join([c.text.strip() for c in r.cells]))
+    o = '\n'.join(lines)
+    print(o[:15000] + '\n...(已截断)' if len(o) > 15000 else o)
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#,
+                path = path
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).to_string())
-            } else {
-                Err(format!("读取 PPT 失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            run_python_script(&script).await
         }
 
         "doc_convert" => {
@@ -1475,19 +1695,46 @@ const {{ chromium }} = require('playwright');
                 .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
 
             let script = format!(
-                "import sys\ninp='{}'\nout='{}'\nie='{}'\noe='{}'\ntry:\n if ie=='docx' and oe=='txt':\n  import docx;d=docx.Document(inp);open(out,'w',encoding='utf-8').write('\\n'.join([p.text for p in d.paragraphs]))\n elif ie in('xlsx','xls') and oe=='csv':\n  import pandas as pd;pd.read_excel(inp).to_csv(out,index=False,encoding='utf-8-sig')\n elif ie=='csv' and oe in('xlsx','xls'):\n  import pandas as pd;pd.read_csv(inp).to_excel(out,index=False)\n elif ie=='docx' and oe=='html':\n  import docx;d=docx.Document(inp);h='<html><body>'+''.join([f'<p>{{p.text}}</p>' for p in d.paragraphs])+'</body></html>';open(out,'w',encoding='utf-8').write(h)\n elif ie=='txt' and oe=='docx':\n  import docx;d=docx.Document()\n  for l in open(inp,'r',encoding='utf-8'): d.add_paragraph(l.strip())\n  d.save(out)\n else: print(f'不支持: {{ie}}->{{oe}}',file=sys.stderr);sys.exit(1)\n print(f'转换完成: {{out}}')\nexcept Exception as e: print(f'ERROR: {{e}}',file=sys.stderr);sys.exit(1)",
-                input_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                in_ext, out_ext
+                r#"import sys, os
+inp = r'{inp}'
+out = r'{out}'
+ie = '{ie}'
+oe = '{oe}'
+os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+try:
+    if ie == 'docx' and oe == 'txt':
+        import docx
+        d = docx.Document(inp)
+        open(out, 'w', encoding='utf-8').write('\n'.join([p.text for p in d.paragraphs]))
+    elif ie in ('xlsx', 'xls') and oe == 'csv':
+        import pandas as pd
+        pd.read_excel(inp).to_csv(out, index=False, encoding='utf-8-sig')
+    elif ie == 'csv' and oe in ('xlsx', 'xls'):
+        import pandas as pd
+        pd.read_csv(inp).to_excel(out, index=False)
+    elif ie == 'docx' and oe == 'html':
+        import docx
+        d = docx.Document(inp)
+        h = '<html><body>' + ''.join([f'<p>{{p.text}}</p>' for p in d.paragraphs]) + '</body></html>'
+        open(out, 'w', encoding='utf-8').write(h)
+    elif ie == 'txt' and oe == 'docx':
+        import docx
+        d = docx.Document()
+        for l in open(inp, 'r', encoding='utf-8'):
+            d.add_paragraph(l.strip())
+        d.save(out)
+    else:
+        print(f'不支持: {{ie}}->{{oe}}', file=sys.stderr)
+        sys.exit(1)
+    print(f'转换完成: {{out}}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#,
+                inp = input_path, out = output_path, ie = in_ext, oe = out_ext
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行转换失败: {}", e))?;
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-            } else {
-                Err(format!("文档转换失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(result.trim().to_string())
         }
 
         // ── New Communication Design Tools ──
@@ -1500,7 +1747,7 @@ const {{ chromium }} = require('playwright');
             let script = format!(
                 r#"import pandas as pd, sys
 try:
-    df = pd.read_excel('{}', sheet_name={})
+    df = pd.read_excel(r'{path}', sheet_name={sheet})
     print(f'数据维度: {{df.shape[0]}} 行 x {{df.shape[1]}} 列')
     print(f'\n列名: {{list(df.columns)}}')
     print(f'\n数据类型:\n{{df.dtypes.to_string()}}')
@@ -1509,20 +1756,13 @@ try:
     print(f'\n非空统计:\n{{df.count().to_string()}}')
     print(f'\n唯一值数:\n{{df.nunique().to_string()}}')
 except Exception as e:
-    print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
 "#,
-                path.replace('\\', "\\\\").replace('\'', "\\'"),
-                sheet_clause
+                path = path, sheet = sheet_clause
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(if stdout.len() > 15000 { format!("{}\n...(已截断)", &stdout[..15000]) } else { stdout })
-            } else {
-                Err(format!("分析失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            let result = run_python_script(&script).await?;
+            if result.len() > 15000 { Ok(format!("{}\n...(已截断)", &result[..15000])) } else { Ok(result) }
         }
 
         "csv_to_excel" => {
@@ -1534,67 +1774,63 @@ except Exception as e:
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
             let script = format!(
-                "import pandas as pd,sys\ntry:\n df=pd.read_csv('{}',encoding='{}',sep='{}')\n df.to_excel('{}',index=False)\n print(f'转换完成: {{df.shape[0]}} 行 x {{df.shape[1]}} 列')\nexcept Exception as e: print(f'ERROR: {{e}}',file=sys.stderr);sys.exit(1)",
-                input_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                encoding, sep,
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                r#"import pandas as pd, sys, os
+try:
+    os.makedirs(os.path.dirname(r'{out}') or '.', exist_ok=True)
+    df = pd.read_csv(r'{inp}', encoding='{enc}', sep='{sep}')
+    df.to_excel(r'{out}', index=False)
+    print(f'转换完成: {{df.shape[0]}} 行 x {{df.shape[1]}} 列')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#,
+                inp = input_path, out = output_path, enc = encoding, sep = sep
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(format!("文件已转换: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
-            } else {
-                Err(format!("CSV转Excel失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("文件已转换: {}\n{}", output_path, result.trim()))
         }
 
         "data_merge" => {
             let input_paths = arguments["input_paths"].as_str().ok_or("data_merge: missing input_paths")?;
             let output_path = arguments["output_path"].as_str().ok_or("data_merge: missing output_path")?;
             let merge_type = arguments["merge_type"].as_str().unwrap_or("concat");
-            let merge_key = arguments["merge_key"].as_str().unwrap_or("");
+            let _merge_key = arguments["merge_key"].as_str().unwrap_or("");
             if let Some(parent) = std::path::Path::new(output_path).parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
             let script = format!(
-                r#"import pandas as pd, sys
+                r#"import pandas as pd, sys, os
 try:
-    paths = '{}'
+    paths = r'{paths}'
     file_list = [p.strip() for p in paths.split(';') if p.strip()]
     dfs = []
     for f in file_list:
-        if f.endswith('.csv'): dfs.append(pd.read_csv(f))
-        else: dfs.append(pd.read_excel(f))
-    if '{}' == 'merge' and '{}': result = dfs[0]
-    else: result = pd.concat(dfs, ignore_index=True)
-    ext = '{}'.rsplit('.', 1)[-1].lower()
-    if ext == 'csv': result.to_csv('{}', index=False, encoding='utf-8-sig')
-    else: result.to_excel('{}', index=False)
+        if f.endswith('.csv'):
+            dfs.append(pd.read_csv(f))
+        else:
+            dfs.append(pd.read_excel(f))
+    result = pd.concat(dfs, ignore_index=True)
+    out = r'{out}'
+    os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+    if out.endswith('.csv'):
+        result.to_csv(out, index=False, encoding='utf-8-sig')
+    else:
+        result.to_excel(out, index=False)
     print(f'合并完成: {{len(dfs)}} 个文件 -> {{result.shape[0]}} 行 x {{result.shape[1]}} 列')
-except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
 "#,
-                input_paths.replace('\\', "\\\\").replace('\'', "\\'"),
-                merge_type, merge_key,
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                paths = input_paths, out = output_path
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(format!("文件已合并: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
-            } else {
-                Err(format!("数据合并失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("文件已合并: {}\n{}", output_path, result.trim()))
         }
 
         "text_extract" => {
             let text = arguments["text"].as_str().ok_or("text_extract: missing text")?;
             let extract_type = arguments["extract_type"].as_str().ok_or("text_extract: missing extract_type")?;
             let custom_prompt = arguments["custom_prompt"].as_str().unwrap_or("");
-            // Build extraction result based on type
             let instruction = match extract_type {
                 "table" => "请从以下文本中提取表格数据，以JSON数组格式返回，每个元素为一行数据的对象。",
                 "params" => "请从以下文本中提取所有参数和数值，以JSON对象格式返回，键为参数名，值为参数值。",
@@ -1611,18 +1847,11 @@ except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
             if let Some(parent) = std::path::Path::new(output_path).parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", code]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                if tokio::fs::metadata(output_path).await.is_ok() {
-                    Ok(format!("报告已生成: {}\n{}", output_path, stdout.trim()))
-                } else {
-                    Ok(format!("Python 执行成功但未检测到报告文件。stdout: {}", stdout.trim()))
-                }
+            let result = run_python_script(code).await?;
+            if tokio::fs::metadata(output_path).await.is_ok() {
+                Ok(format!("报告已生成: {}\n{}", output_path, result.trim()))
             } else {
-                Err(format!("报告生成失败:\n{}", String::from_utf8_lossy(&output.stderr).trim()))
+                Ok(format!("Python 执行成功但未检测到报告文件。stdout: {}", result.trim()))
             }
         }
 
@@ -1634,34 +1863,39 @@ except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
             let script = format!(
-                r#"import pandas as pd, sys
+                r#"import pandas as pd, sys, os
 try:
-    inp = '{}'
-    if inp.endswith('.csv'): df = pd.read_csv(inp)
-    else: df = pd.read_excel(inp)
-    ops = '{}'
-    if '转置' in ops: df = df.T; df.columns = df.iloc[0]; df = df[1:]
-    if '删除空行' in ops: df = df.dropna(how='all')
-    if '删除空列' in ops: df = df.dropna(axis=1, how='all')
-    if '去重' in ops: df = df.drop_duplicates()
-    out = '{}'
-    if out.endswith('.csv'): df.to_csv(out, index=False, encoding='utf-8-sig')
-    else: df.to_excel(out, index=False)
+    inp = r'{inp}'
+    if inp.endswith('.csv'):
+        df = pd.read_csv(inp)
+    else:
+        df = pd.read_excel(inp)
+    ops = '{ops}'
+    if '转置' in ops:
+        df = df.T
+        df.columns = df.iloc[0]
+        df = df[1:]
+    if '删除空行' in ops:
+        df = df.dropna(how='all')
+    if '删除空列' in ops:
+        df = df.dropna(axis=1, how='all')
+    if '去重' in ops:
+        df = df.drop_duplicates()
+    out = r'{out}'
+    os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+    if out.endswith('.csv'):
+        df.to_csv(out, index=False, encoding='utf-8-sig')
+    else:
+        df.to_excel(out, index=False)
     print(f'转换完成: {{df.shape[0]}} 行 x {{df.shape[1]}} 列 -> {{out}}')
-except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
 "#,
-                input_path.replace('\\', "\\\\").replace('\'', "\\'"),
-                operations.replace('\'', "\\'"),
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+                inp = input_path, ops = operations, out = output_path
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(format!("表格转换完成: {}\n{}", output_path, String::from_utf8_lossy(&output.stdout).trim()))
-            } else {
-                Err(format!("表格转换失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("表格转换完成: {}\n{}", output_path, result.trim()))
         }
 
         "pdf_read" => {
@@ -1670,9 +1904,9 @@ except Exception as e: print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
             let script = format!(
                 r#"import sys
 try:
-    import fitz  # PyMuPDF
-    doc = fitz.open('{}')
-    pages = min(len(doc), {})
+    import fitz
+    doc = fitz.open(r'{path}')
+    pages = min(len(doc), {max_pages})
     text = []
     for i in range(pages):
         page = doc[i]
@@ -1682,40 +1916,29 @@ try:
 except ImportError:
     try:
         from PyPDF2 import PdfReader
-        reader = PdfReader('{}')
-        pages = min(len(reader.pages), {})
+        reader = PdfReader(r'{path}')
+        pages = min(len(reader.pages), {max_pages})
         text = []
         for i in range(pages):
             text.append(f'\n=== 第 {{i+1}} 页 ===\n{{reader.pages[i].extract_text() or ""}}')
         result = '\n'.join(text)
         print(result[:20000] + '\n...(已截断)' if len(result) > 20000 else result)
     except Exception as e2:
-        print(f'ERROR: 请安装 PyMuPDF 或 PyPDF2: pip install pymupdf PyPDF2. {{e2}}', file=sys.stderr)
+        print(f'ERROR: pip install pymupdf PyPDF2. {{e2}}', file=sys.stderr)
         sys.exit(1)
 except Exception as e:
-    print(f'ERROR: {{e}}', file=sys.stderr); sys.exit(1)
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
 "#,
-                path.replace('\\', "\\\\").replace('\'', "\\'"),
-                max_pages,
-                path.replace('\\', "\\\\").replace('\'', "\\'"),
-                max_pages,
+                path = path, max_pages = max_pages
             );
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &script]).output().await
-                .map_err(|e| format!("执行 Python 失败: {}", e))?;
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).to_string())
-            } else {
-                Err(format!("读取 PDF 失败: {}", String::from_utf8_lossy(&output.stderr).trim()))
-            }
+            run_python_script(&script).await
         }
 
         "json_process" => {
             let input = arguments["input"].as_str().ok_or("json_process: missing input")?;
             let operation = arguments["operation"].as_str().ok_or("json_process: missing operation")?;
             let expression = arguments["expression"].as_str().unwrap_or("");
-
-            // Try to parse as JSON string first; if fails, try reading as file
             let json_str = if input.trim().starts_with('{') || input.trim().starts_with('[') {
                 input.to_string()
             } else if std::path::Path::new(input).exists() {
@@ -1723,14 +1946,13 @@ except Exception as e:
             } else {
                 input.to_string()
             };
-
             match operation {
                 "validate" => {
                     match serde_json::from_str::<Value>(&json_str) {
-                        Ok(v) => Ok(format!("✅ JSON 格式有效\n类型: {}\n大小: {} 字符",
+                        Ok(v) => Ok(format!("JSON 格式有效, 类型: {}, 大小: {} 字符",
                             if v.is_object() { "Object" } else if v.is_array() { "Array" } else { "Primitive" },
                             json_str.len())),
-                        Err(e) => Ok(format!("❌ JSON 格式无效: {}", e)),
+                        Err(e) => Ok(format!("JSON 格式无效: {}", e)),
                     }
                 }
                 "format" => {
@@ -1742,7 +1964,6 @@ except Exception as e:
                 "extract" => {
                     match serde_json::from_str::<Value>(&json_str) {
                         Ok(v) => {
-                            // Simple JSONPath-like extraction
                             let parts: Vec<&str> = expression.split('.').filter(|s| !s.is_empty()).collect();
                             let mut current = &v;
                             for part in &parts {
@@ -1759,202 +1980,118 @@ except Exception as e:
                         Err(e) => Err(format!("JSON 解析失败: {}", e)),
                     }
                 }
-                _ => Ok(format!("[json_process] 操作: {}, 表达式: {}, 数据大小: {} 字符", operation, expression, json_str.len())),
+                _ => Ok(format!("[json_process] 操作: {}, 表达式: {}, 数据: {} 字符", operation, expression, json_str.len())),
             }
         }
 
         // ── image_process: Python Pillow ──
         "image_process" => {
-            let code = arguments["code"]
-                .as_str()
-                .ok_or("image_process: missing code")?;
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", code])
-                .output()
-                .await
-                .map_err(|e| format!("Python 执行失败: {}", e))?;
-
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(format!("图片处理完成\n{}", stdout.trim()))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("图片处理失败: {}", stderr.trim()))
-            }
+            let code = arguments["code"].as_str().ok_or("image_process: missing code")?;
+            let result = run_python_script(code).await?;
+            Ok(format!("图片处理完成\n{}", result.trim()))
         }
 
         // ── chart_generate: Python matplotlib ──
         "chart_generate" => {
-            let code = arguments["code"]
-                .as_str()
-                .ok_or("chart_generate: missing code")?;
-            let output_path = arguments["output_path"]
-                .as_str()
-                .unwrap_or("chart.png");
-
-            // Wrap user code with matplotlib backend setup
+            let code = arguments["code"].as_str().ok_or("chart_generate: missing code")?;
+            let output_path = arguments["output_path"].as_str().unwrap_or("chart.png");
             let full_code = format!(
                 "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\n{}\nprint('图表已保存到: {}')",
                 code, output_path
             );
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &full_code])
-                .output()
-                .await
-                .map_err(|e| format!("Python 执行失败: {}", e))?;
-
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(format!("图表生成完成: {}\n{}", output_path, stdout.trim()))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("图表生成失败: {}", stderr.trim()))
-            }
+            let result = run_python_script(&full_code).await?;
+            Ok(format!("图表生成完成: {}\n{}", output_path, result.trim()))
         }
 
-        // ── qrcode_generate: Python qrcode ──
+        // ── qrcode_generate ──
         "qrcode_generate" => {
-            let content = arguments["content"]
-                .as_str()
-                .ok_or("qrcode_generate: missing content")?;
-            let output_path = arguments["output_path"]
-                .as_str()
-                .ok_or("qrcode_generate: missing output_path")?;
+            let content = arguments["content"].as_str().ok_or("qrcode_generate: missing content")?;
+            let output_path = arguments["output_path"].as_str().ok_or("qrcode_generate: missing output_path")?;
             let _size = arguments["size"].as_u64().unwrap_or(300);
-
-            let code = format!(
-                "import qrcode\nimg = qrcode.make('{}')\nimg.save('{}')\nprint('二维码已保存')",
-                content.replace('\'', "\\'"),
-                output_path.replace('\\', "\\\\").replace('\'', "\\'"),
+            let script = format!(
+                "import qrcode, os\npath = r'{}'\nos.makedirs(os.path.dirname(path) or '.', exist_ok=True)\nimg = qrcode.make('{}')\nimg.save(path)\nprint('二维码已保存')",
+                output_path, content
             );
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &code])
-                .output()
-                .await
-                .map_err(|e| format!("Python 执行失败: {}", e))?;
-
-            if output.status.success() {
-                Ok(format!("二维码已生成: {}", output_path))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("二维码生成失败: {}", stderr.trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("二维码已生成: {}\n{}", output_path, result.trim()))
         }
 
-        // ── markdown_convert: Python markdown ──
+        // ── markdown_convert ──
         "markdown_convert" => {
-            let input_path = arguments["input_path"]
-                .as_str()
-                .ok_or("markdown_convert: missing input_path")?;
-            let output_path = arguments["output_path"]
-                .as_str()
-                .ok_or("markdown_convert: missing output_path")?;
-
-            let code = format!(
-                "import markdown\nwith open(r'{}', 'r', encoding='utf-8') as f: md = f.read()\nhtml = markdown.markdown(md, extensions=['tables', 'fenced_code'])\nwith open(r'{}', 'w', encoding='utf-8') as f: f.write('<html><head><meta charset=\"utf-8\"></head><body>' + html + '</body></html>')\nprint('转换完成')",
-                input_path, output_path,
+            let input_path = arguments["input_path"].as_str().ok_or("markdown_convert: missing input_path")?;
+            let output_path = arguments["output_path"].as_str().ok_or("markdown_convert: missing output_path")?;
+            let script = format!(
+                r#"import markdown, os
+inp = r'{inp}'
+out = r'{out}'
+os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+with open(inp, 'r', encoding='utf-8') as f:
+    md = f.read()
+html = markdown.markdown(md, extensions=['tables', 'fenced_code'])
+with open(out, 'w', encoding='utf-8') as f:
+    f.write('<html><head><meta charset="utf-8"></head><body>' + html + '</body></html>')
+print('Markdown 转换完成')
+"#,
+                inp = input_path, out = output_path
             );
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &code])
-                .output()
-                .await
-                .map_err(|e| format!("Python 执行失败: {}", e))?;
-
-            if output.status.success() {
-                Ok(format!("Markdown 转换完成: {} -> {}", input_path, output_path))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("Markdown 转换失败: {}", stderr.trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("Markdown 转换完成: {} -> {}\n{}", input_path, output_path, result.trim()))
         }
 
-        // ── web_scrape: Python requests + BeautifulSoup ──
+        // ── web_scrape ──
         "web_scrape" => {
-            let url = arguments["url"]
-                .as_str()
-                .ok_or("web_scrape: missing url")?;
+            let url = arguments["url"].as_str().ok_or("web_scrape: missing url")?;
             let selector = arguments["selector"].as_str().unwrap_or("");
             let output_path = arguments["output_path"].as_str();
-
-            let selector_code = if selector.is_empty() {
+            let selector_line = if selector.is_empty() {
                 "elements = soup.find_all(['h1','h2','h3','p','li'])".to_string()
             } else {
-                format!("elements = soup.select('{}')", selector.replace('\'', "\\'"))
+                format!("elements = soup.select('{}')", selector)
             };
-
-            let save_code = match output_path {
+            let save_line = match output_path {
                 Some(path) => format!(
-                    "\nimport json\nwith open(r'{}', 'w', encoding='utf-8') as f: json.dump(results, f, ensure_ascii=False, indent=2)\nprint(f'已保存 {{len(results)}} 条数据到 {}')",
-                    path, path
+                    "import json\nwith open(r'{}', 'w', encoding='utf-8') as f:\n    json.dump(results, f, ensure_ascii=False, indent=2)\nprint('已保存数据')",
+                    path
                 ),
-                None => "\nfor r in results[:30]: print(r)".to_string(),
+                None => "for r in results[:30]:\n    print(r)".to_string(),
             };
-
-            let code = format!(
-                "import requests\nfrom bs4 import BeautifulSoup\nr = requests.get('{}', timeout=15, headers={{'User-Agent':'Mozilla/5.0'}})\nr.encoding = r.apparent_encoding\nsoup = BeautifulSoup(r.text, 'lxml')\n{}\nresults = [el.get_text(strip=True) for el in elements if el.get_text(strip=True)]{}",
-                url.replace('\'', "\\'"),
-                selector_code,
-                save_code,
+            let script = format!(
+                r#"import requests
+from bs4 import BeautifulSoup
+r = requests.get('{url}', timeout=15, headers={{'User-Agent': 'Mozilla/5.0'}})
+r.encoding = r.apparent_encoding
+soup = BeautifulSoup(r.text, 'lxml')
+{selector}
+results = [el.get_text(strip=True) for el in elements if el.get_text(strip=True)]
+{save}
+"#,
+                url = url, selector = selector_line, save = save_line
             );
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &code])
-                .output()
-                .await
-                .map_err(|e| format!("Python 执行失败: {}", e))?;
-
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(format!("网页数据提取完成:\n{}", stdout.trim()))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("网页爬取失败: {}", stderr.trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("网页数据提取完成:\n{}", result.trim()))
         }
 
-        // ── translate_text: free translation ──
+        // ── translate_text ──
         "translate_text" => {
-            let text = arguments["text"]
-                .as_str()
-                .ok_or("translate_text: missing text")?;
-            let target_lang = arguments["target_language"]
-                .as_str()
-                .ok_or("translate_text: missing target_language")?;
-
-            // Use a simple translation approach via Google Translate unofficial API
-            let code = format!(
+            let text = arguments["text"].as_str().ok_or("translate_text: missing text")?;
+            let target_lang = arguments["target_language"].as_str().ok_or("translate_text: missing target_language")?;
+            let script = format!(
                 r#"import urllib.request, urllib.parse, json
-text = '''{}'''
-tl = '{}'
+text = r'''{text}'''
+tl = '{tl}'
 encoded = urllib.parse.quote(text)
 url = f'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={{tl}}&dt=t&q={{encoded}}'
-req = urllib.request.Request(url, headers={{'User-Agent':'Mozilla/5.0'}})
+req = urllib.request.Request(url, headers={{'User-Agent': 'Mozilla/5.0'}})
 with urllib.request.urlopen(req, timeout=10) as r:
     data = json.loads(r.read())
     result = ''.join([s[0] for s in data[0] if s[0]])
-    print(result)"#,
-                text.replace("'''", "\\'\\'\\'\\'"), target_lang,
+    print(result)
+"#,
+                text = text, tl = target_lang
             );
-
-            let output = tokio::process::Command::new("python")
-                .args(&["-c", &code])
-                .output()
-                .await
-                .map_err(|e| format!("翻译执行失败: {}", e))?;
-
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                Ok(format!("翻译结果 ({}): {}", target_lang, stdout.trim()))
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Err(format!("翻译失败: {}", stderr.trim()))
-            }
+            let result = run_python_script(&script).await?;
+            Ok(format!("翻译结果 ({}): {}", target_lang, result.trim()))
         }
-
         // ── compress_archive: PowerShell Compress-Archive / Expand-Archive ──
         "compress_archive" => {
             let action = arguments["action"]

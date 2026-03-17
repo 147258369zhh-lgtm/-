@@ -6,9 +6,12 @@ mod db;
 pub mod logger;
 mod mcp;
 mod models;
+pub mod plugin_registry;
 mod rag;
 pub mod tools;
 pub mod utils;
+mod token_usage;
+mod workflow;
 
 use std::path::PathBuf;
 use tauri::Manager;
@@ -148,7 +151,64 @@ pub fn run() {
             agent::agent_delete_blueprint,
             agent::agent_list_experiences,
             frontend_log,
-            get_log_path
+            get_log_path,
+            // ── Workflow Engine (P0) ──
+            workflow::workflow_create,
+            workflow::workflow_list,
+            workflow::workflow_get,
+            workflow::workflow_update,
+            workflow::workflow_delete,
+            workflow::workflow_run,
+            workflow::workflow_pause,
+            workflow::workflow_cancel,
+            workflow::workflow_human_respond,
+            workflow::workflow_list_active,
+            workflow::workflow_get_status,
+            workflow::workflow_list_executions,
+            workflow::workflow_get_step_logs,
+            // ── P1: Skill System ──
+            workflow::skill_create,
+            workflow::skill_list,
+            workflow::skill_get,
+            workflow::skill_update,
+            workflow::skill_delete,
+            workflow::skill_search,
+            // ── P1: Tool Registry ──
+            workflow::tool_list,
+            workflow::tool_search,
+            workflow::tool_set_enabled,
+            // ── P2: Browser Automation ──
+            workflow::browser_create_session,
+            workflow::browser_execute_action,
+            workflow::browser_list_sessions,
+            workflow::browser_close_session,
+            // ── P3: Experience System ──
+            workflow::experience_save_template,
+            workflow::experience_list_templates,
+            workflow::experience_delete_template,
+            workflow::experience_apply_correction,
+            workflow::experience_record_outcome,
+            workflow::experience_search,
+            // ── P3: Migration ──
+            workflow::migration_get_version,
+            workflow::migration_run,
+            // ── Plugin Registry ──
+            plugin_registry::registry_list,
+            plugin_registry::registry_list_by_type,
+            plugin_registry::registry_enable,
+            plugin_registry::registry_disable,
+            plugin_registry::registry_install,
+            plugin_registry::registry_uninstall,
+            plugin_registry::registry_export,
+            plugin_registry::registry_export_all,
+            plugin_registry::registry_import,
+            plugin_registry::registry_update,
+            plugin_registry::registry_get_enabled_tools,
+            plugin_registry::registry_search_npm,
+            plugin_registry::registry_translate_batch,
+            // ── Token Usage Tracking ──
+            token_usage::get_token_stats,
+            token_usage::clear_token_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

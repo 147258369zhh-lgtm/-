@@ -110,6 +110,53 @@ pub fn build_planner_prompt(goal: &str, tool_descriptions: &str) -> String {
     )
 }
 
+/// v4: 增强版 planner prompt — 注入工具白/黑名单 + DoneSpec
+/// 2.3 + 2.1
+pub fn build_planner_prompt_v4(
+    goal: &str,
+    tool_descriptions: &str,
+    unavailable_tools: &[(String, String)],  // (tool_name, reason)
+    done_spec: Option<&super::types::DoneSpec>,
+) -> String {
+    let mut prompt = build_planner_prompt(goal, tool_descriptions);
+
+    // 2.3: 注入不可用工具黑名单
+    if !unavailable_tools.is_empty() {
+        let blacklist = unavailable_tools.iter()
+            .map(|(name, reason)| format!("- ❌ `{}`: {}", name, reason))
+            .collect::<Vec<_>>()
+            .join("\n");
+        prompt.push_str(&format!(
+            "\n\n## 🚫 不可用工具（严禁使用以下工具）\n{}\n**以上工具已被系统确认不可用，请勿规划使用。**\n",
+            blacklist
+        ));
+    }
+
+    // 2.1: 注入验收标准
+    if let Some(spec) = done_spec {
+        let mut spec_text = format!(
+            "\n## 🎯 验收标准（最终输出必须满足）\n- 交付物类型: {}\n",
+            spec.deliverable_type
+        );
+        if let Some(ref path) = spec.save_path {
+            spec_text.push_str(&format!("- 保存路径: {}\n", path));
+        }
+        if let Some(ref pattern) = spec.filename_pattern {
+            spec_text.push_str(&format!("- 文件名规则: {}\n", pattern));
+        }
+        if !spec.required_content.is_empty() {
+            spec_text.push_str(&format!("- 必须包含: {}\n", spec.required_content.join("、")));
+        }
+        if !spec.success_checks.is_empty() {
+            spec_text.push_str(&format!("- 成功条件: {}\n", spec.success_checks.join("；")));
+        }
+        spec_text.push_str("**最后一步的输出格式和路径必须匹配以上验收标准。**\n");
+        prompt.push_str(&spec_text);
+    }
+
+    prompt
+}
+
 /// Build system prompt for the executor — v3 ReAct format
 /// Injects: role, filtered tools, ReAct thinking structure, experience reference
 pub fn build_executor_prompt(
@@ -344,6 +391,19 @@ pub fn build_replan_prompt(goal: &str, failed_step: &PlanStep, completed: &[Plan
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Classify failure type from error message
+    let err_msg = failed_step.result.as_deref().unwrap_or("未知错误");
+    let error_type = classify_error(err_msg);
+
+    // Extract tool name from failed step
+    let failed_tool = extract_tool_hint(&failed_step.task)
+        .unwrap_or_else(|| "unknown".into());
+
+    // Build list of tools already tried
+    let tried_tools: Vec<String> = completed.iter()
+        .filter_map(|s| extract_tool_hint(&s.task))
+        .collect();
+
     format!(
         r#"当前计划部分失败，需要重新规划。
 
@@ -352,13 +412,26 @@ pub fn build_replan_prompt(goal: &str, failed_step: &PlanStep, completed: &[Plan
 已完成步骤:
 {done}
 
-失败步骤: {failed_task} → 错误: {failed_result}
+## 失败详情（结构化）
+- 失败步骤: {failed_task}
+- 失败工具: {failed_tool}
+- 错误类型: {error_type}
+- 错误信息: {err_msg}
+- 已尝试工具: [{tried}]
 
-## 要求
-1. 保留已完成的工作成果，不要重复已完成的步骤
-2. 只规划新的剩余步骤
-3. 每步必须指定 tool_hint
-4. 避免使用导致失败的相同方法，尝试替代方案
+## 约束规则（必须严格遵守）
+1. **绝对不要再使用** `{failed_tool}` 执行同样的操作，必须换替代方案
+2. 保留已完成的工作成果，不要重复已完成的步骤
+3. 只规划新的剩余步骤
+4. 每步必须指定 tool_hint
+5. 优先选择更简单、更可靠的工具
+
+## 常用替代方案
+- shell_run 失败 → 尝试用 python 在 shell_run 中执行
+- word_write 失败 → 用 file_write 创建纯文本
+- excel_write 失败 → 用 file_write 创建 CSV
+- web_scrape 失败 → 用 shell_run + curl
+- file_list 失败 → 用 shell_run + dir 命令
 
 用 JSON 格式返回：
 {{"steps": [{{"id": 1, "task": "步骤描述", "tool_hint": "tool_name"}}]}}
@@ -366,8 +439,30 @@ pub fn build_replan_prompt(goal: &str, failed_step: &PlanStep, completed: &[Plan
         goal = goal,
         done = if done.is_empty() { "  (尚无)".to_string() } else { done },
         failed_task = failed_step.task,
-        failed_result = failed_step.result.as_deref().unwrap_or("未知错误")
+        failed_tool = failed_tool,
+        error_type = error_type,
+        err_msg = err_msg,
+        tried = tried_tools.join(", "),
     )
+}
+
+/// Classify error type from error message (for structured replan context)
+fn classify_error(err_msg: &str) -> &str {
+    if err_msg.contains("超时") || err_msg.contains("timeout") {
+        "Timeout（执行超时）"
+    } else if err_msg.contains("权限") || err_msg.contains("permission") || err_msg.contains("denied") {
+        "PermissionDenied（权限不足）"
+    } else if err_msg.contains("ModuleNotFoundError") || err_msg.contains("缺少库") || err_msg.contains("import") {
+        "DependencyMissing（缺少依赖）"
+    } else if err_msg.contains("FileNotFoundError") || err_msg.contains("找不到") || err_msg.contains("not found") {
+        "FileNotFound（文件不存在）"
+    } else if err_msg.contains("ConnectionError") || err_msg.contains("网络") || err_msg.contains("connect") {
+        "NetworkError（网络连接失败）"
+    } else if err_msg.contains("SyntaxError") || err_msg.contains("语法") {
+        "SyntaxError（代码语法错误）"
+    } else {
+        "Unknown（未知错误）"
+    }
 }
 
 /// Build progress check prompt (injected every N rounds)

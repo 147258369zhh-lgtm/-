@@ -33,6 +33,8 @@ pub struct AgentRunRequest {
     pub task_id: Option<String>,
     pub enabled_tools: Option<Vec<String>>,
     pub context_files: Option<Vec<String>>,
+    /// 启动来源标识："user_click" / "auto_run" / "blueprint_hook" / "unknown"
+    pub triggered_by: Option<String>,
 }
 
 /// A single step in the agent execution log
@@ -83,6 +85,9 @@ pub struct PlanStep {
     pub task: String,
     pub status: StepStatus,
     pub result: Option<String>,
+    /// 前置依赖步骤 ID（借鉴 learn-claude-code s07 任务图 blockedBy 模式）
+    #[serde(default)]
+    pub depends_on: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,6 +218,8 @@ pub enum StopDecision {
     Continue,
     StopSuccess(String),
     StopFailure(String),
+    /// 同工具连续失败 → 强制换策略重规划，不终止
+    ForceReplan(String),
 }
 
 // ═══════════════════════════════════════════════
@@ -285,5 +292,64 @@ pub struct AgentBlueprint {
     pub success_criteria: Vec<String>,
     pub version: String,
     pub created_at: String,
+    /// 验收标准（第二阶段引入，Blueprint 约束保留）
+    pub done_spec: Option<DoneSpec>,
+}
+
+// ═══════════════════════════════════════════════
+// v4: Phase 1 基础闭环 — 结构化类型
+// ═══════════════════════════════════════════════
+
+/// 结构化工具执行结果（替代 Result<String, String>）
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolResult {
+    pub tool_name: String,
+    pub args: Value,
+    pub success: bool,
+    pub stdout: String,
+    pub stderr: Option<String>,
+    pub error_type: Option<FailureCategory>,
+    pub duration_ms: u64,
+}
+
+/// 验收标准 — 定义"最终要交付什么"
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoneSpec {
+    /// 交付物类型: "docx" / "xlsx" / "txt" / "json" / "none"
+    pub deliverable_type: String,
+    /// 解析后的真实保存路径
+    pub save_path: Option<String>,
+    /// 文件名规则
+    pub filename_pattern: Option<String>,
+    /// 必须包含的内容要素
+    pub required_content: Vec<String>,
+    /// 可验证的成功条件
+    pub success_checks: Vec<String>,
+}
+
+/// Replan 结构化指令（替代自然语言建议）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action")]
+pub enum ReplanAction {
+    /// 替换某个步骤
+    #[serde(rename = "replace_step")]
+    ReplaceStep {
+        step_id: u32,
+        new_task: String,
+        new_tool_hint: String,
+    },
+    /// 跳过某个步骤
+    #[serde(rename = "skip_step")]
+    SkipStep {
+        step_id: u32,
+        reason: String,
+    },
+    /// 在某步之后插入新步骤
+    #[serde(rename = "insert_step")]
+    InsertStep {
+        after_step_id: u32,
+        new_task: String,
+        new_tool_hint: String,
+    },
 }
 

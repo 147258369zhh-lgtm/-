@@ -173,6 +173,7 @@ impl BlueprintRow {
                 .unwrap_or_default(),
             version: self.version.unwrap_or_else(|| "1.0".into()),
             created_at: self.created_at,
+            done_spec: None,
         }
     }
 }

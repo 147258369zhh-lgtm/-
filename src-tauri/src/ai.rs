@@ -104,11 +104,16 @@ pub async fn upsert_ai_config(pool: State<'_, DbPool>, config: AiConfig) -> Resu
     };
 
     // 全局激活策略：如果当前配置设置为 is_active，则先取消所有其它配置的激活状态
+    // 同时清除旧的模块级路由，避免残留路由指向已失效/错误的配置
     if config.is_active {
         sqlx::query("UPDATE ai_configs SET is_active = 0")
             .execute(&*pool)
             .await
             .map_err(|e| e.to_string())?;
+        // 清除所有模块级 AI 路由（ai_route_chat, ai_route_scheme 等）
+        let _ = sqlx::query("DELETE FROM settings WHERE key LIKE 'ai_route_%'")
+            .execute(&*pool)
+            .await;
     }
 
     sqlx::query(
@@ -221,10 +226,16 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         std::time::Duration::from_secs(60)
     };
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .timeout(timeout)
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .no_proxy() // 避免系统代理干扰本地 LM Studio / Ollama 等
+        .connect_timeout(std::time::Duration::from_secs(10));
+
+    // 智能代理策略：仅本地请求禁用代理，远程请求走系统代理
+    if is_local {
+        client_builder = client_builder.no_proxy();
+    }
+
+    let client = client_builder
         .build()
         .map_err(|e| format!("无法构建 HTTP 客户端: {}", e))?;
 
@@ -449,8 +460,24 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         return Err(format!("AI 响应错误 ({}): {}", status, err_msg));
     }
 
-    let json_resp: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    extract_text_from_response(&json_resp, is_gemini)
+    // 先获取原始文本，再手动解析 JSON — 避免 reqwest 内部 gzip/编码问题
+    let raw_body = resp.text().await.map_err(|e| format!("读取响应体失败: {}", e))?;
+    let json_resp: serde_json::Value = serde_json::from_str(&raw_body)
+        .map_err(|e| format!("JSON 解析失败: {} — 原始响应(前500字): {}", e, &raw_body[..raw_body.len().min(500)]))?;
+    let text = extract_text_from_response(&json_resp, is_gemini)?;
+
+    // Token usage tracking — 解析 API 返回的 usage 字段并记录
+    let pt = json_resp["usage"]["prompt_tokens"].as_i64().unwrap_or(0);
+    let ct = json_resp["usage"]["completion_tokens"].as_i64().unwrap_or(0);
+    if pt > 0 || ct > 0 {
+        let module_label = req.module.as_deref().unwrap_or("ai_chat");
+        let provider_name = active_config.provider.as_str();
+        crate::token_usage::record_token_usage(
+            &*pool, module_label, &model_name, provider_name, pt, ct,
+        ).await;
+    }
+
+    Ok(text)
 }
 
 #[tauri::command]
@@ -477,10 +504,15 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
         std::time::Duration::from_secs(60)
     };
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .timeout(timeout)
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .no_proxy()
+        .connect_timeout(std::time::Duration::from_secs(10));
+
+    if is_local {
+        client_builder = client_builder.no_proxy();
+    }
+
+    let client = client_builder
         .build()
         .map_err(|e| format!("无法构建 HTTP 客户端: {}", e))?;
 
@@ -667,7 +699,9 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
         return Err(format!("AI 响应错误 ({}): {}", status, err_msg));
     }
 
-    let json_resp: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let raw_body = resp.text().await.map_err(|e| format!("读取响应体失败: {}", e))?;
+    let json_resp: serde_json::Value = serde_json::from_str(&raw_body)
+        .map_err(|e| format!("JSON 解析失败: {} — 原始响应(前500字): {}", e, &raw_body[..raw_body.len().min(500)]))?;
     extract_text_from_response(&json_resp, is_gemini)
 }
 
@@ -713,8 +747,7 @@ pub async fn fetch_public_free_apis() -> Result<Vec<AiConfig>, String> {
     ];
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(6))
-        .no_proxy()
+        .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -761,10 +794,13 @@ pub async fn fetch_ai_models(
     base_url: String,
     api_key: Option<String>,
 ) -> Result<Vec<String>, String> {
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let is_local = base_url.contains("localhost") || base_url.contains("127.0.0.1");
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15));
+    if is_local {
+        builder = builder.no_proxy();
+    }
+    let client = builder.build().map_err(|e| e.to_string())?;
 
     let url = format!("{}/models", base_url.trim_end_matches('/'));
     let mut request = client.get(&url);
@@ -783,10 +819,9 @@ pub async fn fetch_ai_models(
         return Err(format!("服务器返回错误: {}", response.status()));
     }
 
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("解析失败: {}", e))?;
+    let raw_body = response.text().await.map_err(|e| format!("读取响应体失败: {}", e))?;
+    let json: serde_json::Value = serde_json::from_str(&raw_body)
+        .map_err(|e| format!("解析模型列表失败: {} — 原始响应(前200字): {}", e, &raw_body[..raw_body.len().min(200)]))?;
 
     let mut models = vec![];
     if let Some(data) = json.get("data").and_then(|d| d.as_array()) {

@@ -28,7 +28,8 @@ pub fn init() {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let _ = std::fs::write(&path, format!(
+        // Write UTF-8 BOM + header for proper Windows encoding
+        let header = format!(
             "═══════════════════════════════════════════════════════\n\
              ║  OpenClaw Agent Debug Log\n\
              ║  Started: {}\n\
@@ -36,7 +37,10 @@ pub fn init() {
              ═══════════════════════════════════════════════════════\n\n",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
             path.display()
-        ));
+        );
+        let mut content = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        content.extend_from_slice(header.as_bytes());
+        let _ = std::fs::write(&path, content);
         println!("[LOGGER] Log file initialized at: {}", path.display());
     });
 }

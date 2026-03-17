@@ -11,7 +11,10 @@ import {
     Camera,
     Mic,
     X,
-    Cpu
+    Cpu,
+    ChevronDown,
+    Search,
+    RefreshCw
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { FileAutomationEngine } from '../utils/FileAutomationEngine';
@@ -42,6 +45,12 @@ export const AiChatSidebar: React.FC<AiChatSidebarProps> = ({ isOpen, onClose })
     const [isLoading, setIsLoading] = useState(false);
     const [activeConfig, setActiveConfig] = useState<any>(null);
     const [isCommandRunning, setIsCommandRunning] = useState(false);
+    // 模型选择器状态
+    const [modelList, setModelList] = useState<string[]>([]);
+    const [selectedModel, setSelectedModel] = useState<string>('');
+    const [showModelPicker, setShowModelPicker] = useState(false);
+    const [modelSearch, setModelSearch] = useState('');
+    const [modelLoading, setModelLoading] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState(`你是一个专业的通信工程设计与规则执行专家。
 你拥有【全量动态业务数据感知能力】，当前项目的全量字段、勘察详情、关联文件、全局报价/合同、以及现有的自动化指令明细已全部挂载在大纲中。
 你的职责：
@@ -88,8 +97,30 @@ export const AiChatSidebar: React.FC<AiChatSidebarProps> = ({ isOpen, onClose })
             const configs: any[] = await invoke('list_ai_configs');
             const active = configs.find(c => c.is_active);
             setActiveConfig(active || null);
+            if (active) {
+                setSelectedModel(active.model_name || '');
+                // 自动尝试拉取模型列表
+                loadModelList(active.base_url, active.api_key);
+            }
         } catch (e) {
             console.error('加载 AI 配置失败:', e);
+        }
+    };
+
+    const loadModelList = async (baseUrl?: string, apiKey?: string) => {
+        if (!baseUrl) return;
+        setModelLoading(true);
+        try {
+            const models: string[] = await invoke('fetch_ai_models', {
+                baseUrl: baseUrl,
+                apiKey: apiKey || null,
+            });
+            setModelList(models);
+        } catch (e) {
+            console.error('获取模型列表失败:', e);
+            setModelList([]);
+        } finally {
+            setModelLoading(false);
         }
     };
 
@@ -162,7 +193,8 @@ ${context}`;
                 req: {
                     prompt,
                     system_prompt: systemPrompt,
-                    module: 'chat'
+                    module: 'chat',
+                    model_override: selectedModel || undefined,
                 }
             });
 
@@ -205,7 +237,8 @@ ${context}`;
                     prompt: textToSend,
                     images: currentAttachments.length > 0 ? currentAttachments : null,
                     system_prompt: systemPrompt,
-                    module: 'chat'
+                    module: 'chat',
+                    model_override: selectedModel || undefined,
                 }
             });
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
@@ -323,7 +356,7 @@ ${context}`;
                     const infos: any[] = await invoke('list_common_info');
                     const merged = infos.map(i => `${i.key}: ${i.value}`).join('\n');
                     const prompt = `请根据以下通用信息整理总结，按“${action.focus || userRequest || '关键点'}”输出：\n${merged}`;
-                    const response: string = await invoke('chat_with_ai', { req: { prompt, module: 'chat' } });
+                    const response: string = await invoke('chat_with_ai', { req: { prompt, module: 'chat', model_override: selectedModel || undefined } });
                     setMessages(prev => [...prev, { role: 'assistant', content: response }]);
                     results.push({ ok: true, action: 'summarize_common_info' });
                 }
@@ -380,12 +413,125 @@ ${context}`;
                 </div>
                 <div className="flex items-center gap-2">
                     {activeConfig && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 border rounded-xl"
-                            style={{ backgroundColor: 'var(--popover-bg)', borderColor: 'var(--popover-border)', boxShadow: 'var(--shadow-sm)' }}>
-                            <Cpu size={12} className="text-blue-500" />
-                            <span className="text-[10px] font-black uppercase truncate max-w-[80px]" style={{ color: 'var(--text-secondary)' }}>
-                                {activeConfig.name}
-                            </span>
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowModelPicker(!showModelPicker)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border rounded-xl transition-all hover:shadow-md"
+                                style={{ backgroundColor: 'var(--popover-bg)', borderColor: showModelPicker ? 'var(--brand)' : 'var(--popover-border)', boxShadow: 'var(--shadow-sm)' }}
+                            >
+                                <Cpu size={11} className="text-blue-500" />
+                                <span className="text-[10px] font-black uppercase truncate max-w-[100px]" style={{ color: 'var(--text-secondary)' }}>
+                                    {selectedModel ? selectedModel.split('/').pop() : activeConfig.name}
+                                </span>
+                                <ChevronDown size={10} style={{ color: 'var(--text-faint)', transform: showModelPicker ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+                            </button>
+
+                            {/* 模型选择器下拉面板 */}
+                            {showModelPicker && (
+                                <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-200"
+                                    style={{
+                                        width: 320, maxHeight: 420, borderRadius: 16,
+                                        backgroundColor: 'var(--bg-raised)', border: '1.5px solid var(--border)',
+                                        boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
+                                        display: 'flex', flexDirection: 'column',
+                                    }}>
+                                    {/* 搜索栏 */}
+                                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <Search size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                                        <input
+                                            value={modelSearch}
+                                            onChange={e => setModelSearch(e.target.value)}
+                                            placeholder="搜索模型名称..."
+                                            autoFocus
+                                            style={{
+                                                flex: 1, border: 'none', outline: 'none', fontSize: 11,
+                                                backgroundColor: 'transparent', color: 'var(--text-primary)',
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => activeConfig && loadModelList(activeConfig.base_url, activeConfig.api_key)}
+                                            disabled={modelLoading}
+                                            style={{
+                                                padding: '3px 8px', borderRadius: 6, border: 'none',
+                                                backgroundColor: 'var(--brand)', color: '#fff',
+                                                fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                                                opacity: modelLoading ? 0.5 : 1,
+                                                display: 'flex', alignItems: 'center', gap: 3,
+                                            }}
+                                        >
+                                            <RefreshCw size={9} style={{ animation: modelLoading ? 'spin 1s linear infinite' : 'none' }} />
+                                            {modelLoading ? '加载' : '刷新'}
+                                        </button>
+                                    </div>
+
+                                    {/* 当前引擎信息 */}
+                                    <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: 9, color: 'var(--text-faint)' }}>
+                                        引擎: {activeConfig.name} · {modelList.length} 个可用模型
+                                    </div>
+
+                                    {/* 模型列表 */}
+                                    <div className="custom-scrollbar" style={{ flex: 1, overflow: 'auto', padding: '4px 6px' }}>
+                                        {modelList.length === 0 && !modelLoading && (
+                                            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-faint)', fontSize: 11 }}>
+                                                暂无模型列表<br />
+                                                <span style={{ fontSize: 9 }}>点击「刷新」拉取，或直接手动输入模型名</span>
+                                            </div>
+                                        )}
+                                        {modelLoading && (
+                                            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-faint)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> 正在从服务器拉取模型列表...
+                                            </div>
+                                        )}
+                                        {modelList
+                                            .filter(m => !modelSearch || m.toLowerCase().includes(modelSearch.toLowerCase()))
+                                            .map(model => (
+                                                <div
+                                                    key={model}
+                                                    onClick={() => {
+                                                        setSelectedModel(model);
+                                                        setShowModelPicker(false);
+                                                        setModelSearch('');
+                                                    }}
+                                                    style={{
+                                                        padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                                                        fontSize: 11, fontFamily: 'monospace',
+                                                        color: model === selectedModel ? 'var(--brand)' : 'var(--text-secondary)',
+                                                        fontWeight: model === selectedModel ? 700 : 400,
+                                                        backgroundColor: model === selectedModel ? 'var(--brand-subtle)' : 'transparent',
+                                                        transition: 'all 0.15s',
+                                                        display: 'flex', alignItems: 'center', gap: 6,
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = model === selectedModel ? 'var(--brand-subtle)' : 'var(--bg-muted)'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = model === selectedModel ? 'var(--brand-subtle)' : 'transparent'; }}
+                                                >
+                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, backgroundColor: model === selectedModel ? 'var(--brand)' : 'var(--border)' }} />
+                                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{model}</span>
+                                                    {model === selectedModel && <span style={{ fontSize: 8, color: 'var(--brand)', fontWeight: 900 }}>当前</span>}
+                                                </div>
+                                            ))}
+                                    </div>
+
+                                    {/* 手动输入区 */}
+                                    <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 4 }}>
+                                        <input
+                                            placeholder="手动输入模型名..."
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                                    setSelectedModel((e.target as HTMLInputElement).value.trim());
+                                                    setShowModelPicker(false);
+                                                }
+                                            }}
+                                            style={{
+                                                flex: 1, padding: '5px 8px', borderRadius: 6, fontSize: 10,
+                                                border: '1px solid var(--border-subtle)',
+                                                backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
+                                                outline: 'none',
+                                            }}
+                                        />
+                                        <span style={{ fontSize: 8, color: 'var(--text-faint)', alignSelf: 'center' }}>Enter 确认</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

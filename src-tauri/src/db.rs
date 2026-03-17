@@ -350,5 +350,114 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<DbPool, Box<dyn std::erro
         .execute(&pool)
         .await?;
 
+    // ═══════════════════════════════════════════════
+    // Workflow Engine Tables (P0)
+    // ═══════════════════════════════════════════════
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS workflows (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            nodes_json TEXT NOT NULL,
+            version INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS workflow_executions (
+            id TEXT PRIMARY KEY,
+            workflow_id TEXT NOT NULL,
+            status TEXT DEFAULT 'created',
+            current_node_index INTEGER DEFAULT 0,
+            checkpoint_json TEXT,
+            started_at DATETIME,
+            completed_at DATETIME,
+            error TEXT,
+            result_json TEXT
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS workflow_step_logs (
+            id TEXT PRIMARY KEY,
+            execution_id TEXT NOT NULL,
+            node_index INTEGER NOT NULL,
+            node_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            input_json TEXT,
+            output_json TEXT,
+            started_at DATETIME,
+            completed_at DATETIME,
+            duration_ms INTEGER,
+            error TEXT
+        );",
+    )
+    .execute(&pool)
+    .await?;
+
+    // Indexes for workflow tables
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_wf_exec_workflow_id ON workflow_executions(workflow_id)")
+        .execute(&pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_wf_step_logs_exec_id ON workflow_step_logs(execution_id)")
+        .execute(&pool)
+        .await?;
+
+    // ═══════════════════════════════════════════════
+    // Skill System Table (P1)
+    // ═══════════════════════════════════════════════
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS skills (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            category TEXT DEFAULT 'general',
+            steps_json TEXT NOT NULL,
+            input_schema TEXT,
+            output_schema TEXT,
+            version INTEGER DEFAULT 1,
+            tags TEXT DEFAULT '[]',
+            usage_count INTEGER DEFAULT 0,
+            success_rate REAL DEFAULT 1.0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
+    .execute(&pool)
+    .await?;
+    // ═══════════════════════════════════════════════
+    // Token Usage Tracking (独立模块 token_usage.rs)
+    // ═══════════════════════════════════════════════
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS token_usage (
+            id TEXT PRIMARY KEY,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            module TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            provider TEXT,
+            source TEXT DEFAULT 'network',
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0
+        );",
+    )
+    .execute(&pool)
+    .await?;
+    // 迁移：已有表可能没有 source 列
+    let _ = sqlx::query("ALTER TABLE token_usage ADD COLUMN source TEXT DEFAULT 'network'")
+        .execute(&pool)
+        .await;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(timestamp)")
+        .execute(&pool)
+        .await?;
+
     Ok(pool)
 }

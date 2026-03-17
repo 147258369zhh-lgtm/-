@@ -217,3 +217,51 @@ impl ExperienceRow {
         }
     }
 }
+
+// ═══════════════════════════════════════════════
+// v4: Phase 3 — Experience 强约束
+// ═══════════════════════════════════════════════
+
+/// 3.3 获取历史失败工具列表（用于 planner 黑名单注入）
+/// 返回 (tool_name, failure_reason) 对
+pub async fn get_failed_tools(
+    pool: &DbPool,
+    intent: &TaskIntent,
+) -> Vec<(String, String)> {
+    let intent_str = serde_json::to_string(intent)
+        .unwrap_or_else(|_| "\"unknown\"".to_string());
+
+    // 查找同 intent 下最近失败的经验
+    let rows = sqlx::query_as::<_, ExperienceRow>(
+        "SELECT id, task_summary, intent, plan_json, tools_used, success,
+                score_accuracy, score_efficiency, score_tool_usage,
+                failure_reason, created_at
+         FROM agent_experiences
+         WHERE intent = ? AND success = 0
+         ORDER BY created_at DESC
+         LIMIT 5"
+    )
+    .bind(&intent_str)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut failed_tools: Vec<(String, String)> = Vec::new();
+
+    for row in rows {
+        let exp = row.into_experience();
+        let reason = exp.failure_reason.unwrap_or_else(|| "未知原因".into());
+        for tool in &exp.tools_used {
+            if !failed_tools.iter().any(|(t, _)| t == tool) {
+                failed_tools.push((tool.clone(), reason.clone()));
+            }
+        }
+    }
+
+    if !failed_tools.is_empty() {
+        app_log!("EXPERIENCE", "Found {} historically failed tools for {:?}",
+            failed_tools.len(), intent);
+    }
+    failed_tools
+}
+

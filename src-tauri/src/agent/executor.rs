@@ -104,8 +104,8 @@ pub async fn execute_step(
         });
         if !tools_json.is_empty() {
             payload["tools"] = json!(tools_json);
-            // v3: Force tool calling — agent MUST call a tool, no lazy text responses
-            payload["tool_choice"] = json!("required");
+            // v3.1: Use "auto" for broader model compatibility (many SiliconFlow models don't support "required")
+            payload["tool_choice"] = json!("auto");
         }
 
         let start = std::time::Instant::now();
@@ -119,9 +119,61 @@ pub async fn execute_step(
             .await
             .map_err(|e| format!("LLM 请求失败: {}", e))?;
 
+        // ── Compatibility fallback: if 400 error with tools, retry without tools ──
         if !resp.status().is_success() {
+            let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            app_log!("EXECUTOR", "[step {}] LLM ERROR body={}", step.id, &body[..body.len().min(1000)]);
+            app_log!("EXECUTOR", "[step {}] LLM ERROR status={} body={}", step.id, status, &body[..body.len().min(1000)]);
+
+            // If it's a 400/422 error (likely tool_choice or tools not supported),
+            // retry without tools — let the model respond with text instructions
+            if (status.as_u16() == 400 || status.as_u16() == 422) && !tools_json.is_empty() {
+                app_log!("EXECUTOR", "[step {}] Retrying WITHOUT tools (model may not support function calling)", step.id);
+
+                let fallback_payload = json!({
+                    "model": llm.model_name,
+                    "messages": ctx.messages,
+                    "temperature": 0.05
+                });
+
+                let mut fallback_req = client.post(&llm.endpoint).json(&fallback_payload);
+                if !llm.api_key.is_empty() {
+                    fallback_req = fallback_req.header("Authorization", format!("Bearer {}", llm.api_key));
+                }
+
+                let fallback_resp = fallback_req.send().await
+                    .map_err(|e| format!("降级请求失败: {}", e))?;
+
+                if !fallback_resp.status().is_success() {
+                    let fb_body = fallback_resp.text().await.unwrap_or_default();
+                    return Err(format!("LLM 响应错误（降级也失败）: {}", fb_body));
+                }
+
+                let fb_json: Value = fallback_resp.json().await
+                    .map_err(|e| format!("降级 JSON 解析失败: {}", e))?;
+                let fb_content = fb_json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
+
+                // Use the text response as the step result
+                let done_step = AgentStep {
+                    round: step.id,
+                    step_type: "step_done".into(),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_result: None,
+                    content: Some(format!("[降级模式] {}", fb_content)),
+                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                };
+                let _ = app_handle.emit("agent-event", AgentEvent {
+                    event_type: "step_done".into(),
+                    step: Some(done_step.clone()),
+                    message: Some(format!("步骤 {} 降级完成", step.id)),
+                });
+                steps_log.push(done_step);
+                ctx.messages.push(json!({"role": "assistant", "content": fb_content}));
+                step_result = fb_content;
+                break;
+            }
+
             return Err(format!("LLM 响应错误: {}", body));
         }
 

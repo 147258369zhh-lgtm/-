@@ -6,6 +6,7 @@ pub mod agent_factory;
 pub mod agent_registry;
 pub mod context_manager;
 pub mod cost_tracker;
+pub mod env_snapshot;
 pub mod executor;
 pub mod experience;
 pub mod failure_analyzer;
@@ -13,9 +14,12 @@ pub mod memory;
 pub mod planner;
 pub mod prompt_builder;
 pub mod reflection;
+pub mod run_trace;
 pub mod stop_judge;
+pub mod task_manifest;
 pub mod task_structurer;
 pub mod template_engine;
+pub mod tool_fallback;
 pub mod tool_knowledge;
 pub mod tool_policy;
 pub mod tool_runtime;
@@ -27,9 +31,28 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 use types::*;
 use crate::app_log;
+use std::sync::{Mutex, LazyLock};
+use std::collections::HashSet;
 
 // ═══════════════════════════════════════════════
-// Agent Run — v2 Step-based Executor
+// 1.1 Agent 启动去重锁 — 防止前端重复触发
+// ═══════════════════════════════════════════════
+
+static RUNNING_AGENTS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Drop guard — 函数退出时自动清理运行锁
+struct RunGuard(String);
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        if let Ok(mut running) = RUNNING_AGENTS.lock() {
+            running.remove(&self.0);
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// Agent Run — v4 Step-based Executor + 基础闭环
 // ═══════════════════════════════════════════════
 
 #[tauri::command]
@@ -39,7 +62,12 @@ pub async fn agent_run(
     req: AgentRunRequest,
 ) -> Result<AgentRunResult, String> {
     crate::logger::init();
+
+    // ── 1.1: 来源标识 + 去重锁 ──
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let triggered_by = req.triggered_by.clone().unwrap_or_else(|| "unknown".into());
     app_log!("AGENT", "========== AGENT RUN START ==========");
+    app_log!("AGENT", "RUN_ID={} triggered_by={}", &run_id, &triggered_by);
     app_log!("AGENT", "prompt: {}", &req.prompt);
     app_log!("AGENT", "goal: {:?}", &req.goal);
     app_log!("AGENT", "model_config_id: {:?}", &req.model_config_id);
@@ -138,11 +166,28 @@ pub async fn agent_run(
         new_id
     };
 
+    // ── 1.1: 去重锁 — 同一 task 拒绝重复启动 ──
+    {
+        let mut running = RUNNING_AGENTS.lock().unwrap();
+        if running.contains(&task_id) {
+            app_log!("AGENT", "⚠️ DUPLICATE: task {} already running, REJECTED", task_id);
+            return Err("该任务已在执行中，请勿重复启动".into());
+        }
+        running.insert(task_id.clone());
+    }
+    let _run_guard = RunGuard(task_id.clone()); // Drop 时自动清理锁
+
     // Ensure v2 tables + experience table
     memory::ensure_v2_tables(&*pool).await;
     experience::ensure_experience_table(&*pool).await;
 
-    // Build tools list (filtered by enabled_tools, always exclude ai_chat which is a no-op)
+    // ── Layer 1.5: Environment Snapshot (Cloud Code pattern) ──
+    // Capture runtime environment BEFORE planning so Planner makes realistic plans
+    let env = env_snapshot::EnvSnapshot::capture().await;
+    let env_context = env.to_prompt_context();
+    let tool_health = env.get_tool_health();
+
+    // Build tools list (filtered by enabled_tools, health check, always exclude ai_chat)
     let all_tools = tool_runtime::get_builtin_tools();
     let mut tools: Vec<ToolDef> = if let Some(ref enabled) = req.enabled_tools {
         all_tools
@@ -159,16 +204,31 @@ pub async fn agent_run(
         tools = all_tools.into_iter().filter(|t| t.function.name != "ai_chat").collect();
     }
 
-    // Build enhanced system prompt
+    // Health check filter: remove tools that are known-broken in current environment
+    let unhealthy_tools: Vec<String> = tool_health.iter()
+        .filter(|(_, ok, _)| !ok)
+        .map(|(name, _, reason)| {
+            app_log!("AGENT", "Tool health FAIL: {} — {}", name, reason);
+            name.clone()
+        })
+        .collect();
+    let pre_filter_count = tools.len();
+    tools.retain(|t| !unhealthy_tools.contains(&t.function.name));
+    if tools.len() < pre_filter_count {
+        app_log!("AGENT", "Health check: {} → {} tools (removed {} unhealthy)",
+            pre_filter_count, tools.len(), pre_filter_count - tools.len());
+    }
+
+    // Build enhanced system prompt with environment context
     let mut system_prompt = req.system_prompt.unwrap_or_else(|| {
-        r#"你是一个高效的任务执行 AI Agent，运行在 Windows 操作系统上。
+        r#"你是一个高效的任务执行 AI Agent。
 
 ## 核心原则
-你必须通过调用工具来完成任务。收到指令后，立即分析并调用最合适的工具。绝不要返回文本描述来替代工具调用。
+你必须通过调用工具来完成任务。收到指令后，立即分析并调用最合适的工具。
 
 ## 绝对禁止
 - ❌ 禁止使用 ai_chat 工具
-- ❌ 不要返回文本回复来替代工具调用
+- ❌ 不要只返回文本回复
 - ❌ 不要生成代码让用户去执行
 - ❌ 不要请求用户确认
 - ❌ 不要使用 Linux 命令或路径格式
@@ -178,38 +238,24 @@ pub async fn agent_run(
 |---------|--------|
 | 读取文件 | file_read |
 | 写入/创建文件 | file_write |
+| 创建 Word 文档 | word_write（传 title+content）|
+| 创建 Excel | excel_write（传 headers+rows）|
+| 创建 PPT | ppt_create（传 title+slides）|
 | 列出目录文件 | file_list |
-| 搜索文件内容 | file_search |
 | 读取 Excel | excel_read |
-| 写入 Excel | excel_write |
 | 分析 Excel 数据 | excel_analyze |
-| CSV 转 Excel | csv_to_excel |
-| 合并多文件 | data_merge |
-| 表格转换清洗 | table_transform |
-| 读取 PDF | pdf_read |
-| 生成 Word 报告 | report_generate |
-| 网络爬取/新闻/天气 | web_scrape（首选）|
-| 执行命令/安装包 | shell_run (PowerShell) |
-| JSON 处理 | json_process |
-
-## 路径规范
-- 使用 Windows 绝对路径: C:\Users\...
-- 用户提供的文件路径是可信的，直接使用
+| 网络爬取/新闻 | web_scrape（首选）|
+| 执行系统命令 | shell_run |
 
 ## 执行要求
 1. 收到步骤指令后，立即调用工具
-2. 使用上方指南选择正确的工具
-3. 利用前一步骤的结果作为本步骤的输入
-4. 工具执行完成后简要报告结果"#.into()
+2. 利用前一步骤的结果作为输入
+3. 工具执行完成后简要报告结果"#.into()
     });
 
-    // Inject real user environment info
-    let username = std::env::var("USERNAME").unwrap_or_else(|_| "user".into());
-    let userprofile = std::env::var("USERPROFILE").unwrap_or_else(|_| format!("C:\\Users\\{}", username));
-    system_prompt.push_str(&format!(
-        "\n\n## 当前环境\n- Windows 用户名: {}\n- 桌面路径: {}\\Desktop\n- 文档路径: {}\\Documents\n- 使用以上真实路径，不要编造用户名或路径！\n",
-        username, userprofile, userprofile
-    ));
+    // Inject environment snapshot (replaces old hardcoded env info)
+    system_prompt.push_str("\n\n");
+    system_prompt.push_str(&env_context);
 
     // Inject context files
     if let Some(ref files) = req.context_files {
@@ -265,7 +311,7 @@ pub async fn agent_run(
         .collect::<Vec<_>>()
         .join("\n");
 
-    app_log!("AGENT", "tools count: {}", tools.len());
+    app_log!("AGENT", "tools count: {} (after health filter)", tools.len());
     app_log!("AGENT", "Calling planner v3 (experience-aware)...");
 
     let plan = match planner::generate_plan_with_experience(
@@ -287,10 +333,33 @@ pub async fn agent_run(
                     task: goal.clone(),
                     status: StepStatus::Pending,
                     result: None,
+                    depends_on: vec![],
                 }],
             }
         }
     };
+
+    // ── Phase 2: DoneSpec 提取 + Generator-Critic 审查 ──
+    let done_spec = planner::extract_done_spec(&req.prompt);
+    app_log!("AGENT", "DoneSpec: type={}, path={:?}, required_content={:?}",
+        done_spec.deliverable_type,
+        done_spec.save_path,
+        done_spec.required_content);
+
+    // 2.4: validate_plan — 规则式审查
+    let tool_names: Vec<String> = tools.iter()
+        .map(|t| t.function.name.clone())
+        .collect();
+    let plan_issues = planner::validate_plan(&plan, &tool_names, Some(&done_spec));
+    if !plan_issues.is_empty() {
+        app_log!("AGENT", "⚠️ Plan Critic found {} issues:", plan_issues.len());
+        for issue in &plan_issues {
+            app_log!("AGENT", "  - {}", issue);
+        }
+        // 目前仅记录 warning，不阻断执行（后续可增加重新生成逻辑）
+    } else {
+        app_log!("AGENT", "✅ Plan Critic: all checks passed");
+    }
 
     // Save plan to DB
     if let Ok(plan_json) = serde_json::to_string(&plan) {
@@ -403,10 +472,31 @@ pub async fn agent_run(
                 break;
             }
             StopDecision::Continue => {}
+            StopDecision::ForceReplan(reason) => {
+                app_log!("AGENT", "STOP_JUDGE: ForceReplan - {}", reason);
+                // 强制重规划：重置连续失败计数，触发 replan 而非终止
+                consecutive_failures = 0;
+                // 让执行循环继续，下一轮 replan 逻辑会接管
+            }
         }
 
         let mut step = plan_steps[step_idx].clone();
         app_log!("AGENT", "--- Executing step {} / {}: {} ---", step.id, plan_steps.len(), step.task);
+
+        // ── 3.2: depends_on 前置条件验证（借鉴 s07 blockedBy）──
+        if !step.depends_on.is_empty() {
+            let unmet: Vec<u32> = step.depends_on.iter()
+                .filter(|dep_id| {
+                    !ctx.completed_steps.iter().any(|s| s.id == **dep_id)
+                })
+                .cloned()
+                .collect();
+            if !unmet.is_empty() {
+                app_log!("AGENT", "⏸️ Step {} blocked by unmet depends_on: {:?}", step.id, unmet);
+                // 跳过该步骤，等后续轮次重试
+                continue;
+            }
+        }
 
         let result = executor::execute_step(
             &mut ctx,
@@ -444,10 +534,87 @@ pub async fn agent_run(
                 )
                 .await;
 
+                // ── 4.2: Goal Monitoring — 检查目标是否已提前完成 ──
+                if done_spec.deliverable_type != "none" {
+                    if let Some(ref result_text) = step.result {
+                        let r = result_text.to_lowercase();
+                        // 检测文件已成功创建
+                        let file_created = r.contains("successfully") || r.contains("成功")
+                            || r.contains("已创建") || r.contains("已保存")
+                            || r.contains("已写入") || r.contains("wrote");
+                        if file_created && ctx.completed_steps.len() >= 2 {
+                            app_log!("AGENT", "🎯 Goal Monitor: deliverable likely created at step {}, checking early completion",
+                                step.id);
+                        }
+                    }
+                }
+
                 step_idx += 1;
             }
             Err(err) => {
                 step.status = StepStatus::Failed;
+
+                // ── Tool Fallback Chain (Phase 2) ──
+                // Before counting as failure, try fallback tools
+                let tool_hint = prompt_builder::extract_tool_hint(&step.task);
+                let mut fallback_succeeded = false;
+                if let Some(ref hint) = tool_hint {
+                    if let Some(fallbacks) = tool_fallback::get_fallback(hint) {
+                        for fb in &fallbacks {
+                            app_log!("AGENT", "Trying fallback: {} → {} ({})", hint, fb.tool_name, fb.reason);
+                            // Get original args from the last executor call
+                            let fb_args = if let Some(last_step) = steps_log.last() {
+                                if let Some(ref original_args) = last_step.tool_args {
+                                    tool_fallback::transform_args_for_fallback(hint.as_str(), original_args, fb)
+                                } else {
+                                    json!({})
+                                }
+                            } else {
+                                json!({})
+                            };
+
+                            match tool_runtime::execute_tool(
+                                &fb.tool_name, &fb_args, &*pool, &req.allowed_paths, &app_handle
+                            ).await {
+                                Ok(result) => {
+                                    app_log!("AGENT", "Fallback {} succeeded!", fb.tool_name);
+                                    step.status = StepStatus::Done;
+                                    step.result = Some(format!("[降级] {} → {}\n{}", hint, fb.tool_name, result));
+                                    ctx.completed_steps.push(step.clone());
+                                    consecutive_failures = 0;
+                                    fallback_succeeded = true;
+
+                                    let fb_step = AgentStep {
+                                        round: step.id,
+                                        step_type: "fallback".into(),
+                                        tool_name: Some(fb.tool_name.clone()),
+                                        tool_args: serde_json::to_value(&fb_args).ok(),
+                                        tool_result: step.result.clone(),
+                                        content: Some(format!("🔄 {} 失败，已降级到 {} 成功", hint, fb.tool_name)),
+                                        duration_ms: None,
+                                    };
+                                    let _ = app_handle.emit("agent-event", AgentEvent {
+                                        event_type: "fallback".into(),
+                                        step: Some(fb_step.clone()),
+                                        message: Some(fb.reason.clone()),
+                                    });
+                                    steps_log.push(fb_step);
+                                    break;
+                                }
+                                Err(e) => {
+                                    app_log!("AGENT", "Fallback {} also failed: {}", fb.tool_name, e);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if fallback_succeeded {
+                    step_idx += 1;
+                    continue;
+                }
+
+                // Original failure handling
                 ctx.failure_count += 1;
                 consecutive_failures += 1;
 

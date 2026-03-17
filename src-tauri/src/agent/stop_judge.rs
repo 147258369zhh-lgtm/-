@@ -2,11 +2,14 @@ use super::types::*;
 use crate::app_log;
 
 // ═══════════════════════════════════════════════
-// Stop Judge — 独立终止判断器（不依赖 LLM）
+// Stop Judge v3 — 同质/异质失败 + ForceReplan
 // ═══════════════════════════════════════════════
+// 借鉴 Agentic Design Patterns 的"独立裁判"模式
+// - 同质失败（同一工具同类错误≥2） → ForceReplan 换策略
+// - 异质失败（不同工具/策略≥3） → StopFailure 终止
 
 /// Evaluate whether execution should stop
-/// Returns StopDecision::Continue or a stop variant with reason
+/// v3: Returns ForceReplan for homogeneous failures
 pub fn evaluate(
     completed_count: usize,
     total_steps: usize,
@@ -29,29 +32,46 @@ pub fn evaluate(
         ));
     }
 
-    // 3. Consecutive failures → no useful progress
-    if consecutive_failures >= 3 {
-        app_log!("STOP_JUDGE", "3 consecutive failures → StopFailure");
-        return StopDecision::StopFailure(
-            "连续 3 次失败，无有效进展".into()
+    // 3. 同质失败检测 — 连续2次失败先尝试 ForceReplan
+    if consecutive_failures == 2 {
+        app_log!("STOP_JUDGE", "{} consecutive failures → ForceReplan", consecutive_failures);
+        return StopDecision::ForceReplan(
+            format!("连续 {} 次同质失败，强制换策略重规划", consecutive_failures)
         );
     }
 
-    // 4. Too many total failures
-    if total_failures >= 5 {
-        app_log!("STOP_JUDGE", "5 total failures → StopFailure");
+    // 4. 连续失败达到4次 — 即使重规划也救不了
+    if consecutive_failures >= 4 {
+        app_log!("STOP_JUDGE", "{} consecutive failures → StopFailure", consecutive_failures);
         return StopDecision::StopFailure(
-            "总失败次数过多 (5次)，终止执行".into()
+            format!("连续 {} 次失败（含重规划尝试），无有效进展", consecutive_failures)
         );
     }
 
-    // 5. Time budget exceeded
+    // 5. Total failures — lenient with fallbacks
+    if total_failures >= 7 {
+        app_log!("STOP_JUDGE", "{} total failures → StopFailure", total_failures);
+        return StopDecision::StopFailure(
+            format!("总失败次数过多 ({}次)，终止执行", total_failures)
+        );
+    }
+
+    // 6. Time budget exceeded
     if elapsed_secs > budget.max_time_secs {
         app_log!("STOP_JUDGE", "Time budget {}s exceeded (elapsed {}s) → StopFailure",
             budget.max_time_secs, elapsed_secs);
         return StopDecision::StopFailure(format!(
             "执行超时（已用 {}秒，限制 {}秒）", elapsed_secs, budget.max_time_secs
         ));
+    }
+
+    // 7. Near-complete leniency
+    if total_steps > 0 && completed_count * 4 >= total_steps * 3 {
+        if total_failures >= 10 {
+            app_log!("STOP_JUDGE", "Near-complete ({}%) but too many failures", 
+                completed_count * 100 / total_steps);
+            return StopDecision::StopFailure("接近完成但失败过多".into());
+        }
     }
 
     StopDecision::Continue

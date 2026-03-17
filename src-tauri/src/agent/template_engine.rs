@@ -33,9 +33,9 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "新闻采集".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 web_scrape 爬取新闻网站首页".into(), status: StepStatus::Pending, result: None },
-                        PlanStep { id: 2, task: "使用 web_scrape 提取新闻标题和链接".into(), status: StepStatus::Pending, result: None },
-                        PlanStep { id: 3, task: "使用 file_write 将新闻汇总写入文件".into(), status: StepStatus::Pending, result: None },
+                        PlanStep { id: 1, task: "使用 web_scrape 爬取新闻网站首页".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "使用 web_scrape 提取新闻标题和链接".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 3, task: "使用 file_write 将新闻汇总写入文件".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.9,
                     source: TemplateSource::Builtin,
@@ -45,8 +45,8 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "天气查询".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 web_scrape 爬取天气网站获取天气信息".into(), status: StepStatus::Pending, result: None },
-                        PlanStep { id: 2, task: "使用 file_write 将天气信息整理输出".into(), status: StepStatus::Pending, result: None },
+                        PlanStep { id: 1, task: "使用 web_scrape 爬取天气网站获取天气信息".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "使用 file_write 将天气信息整理输出".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.95,
                     source: TemplateSource::Builtin,
@@ -59,9 +59,9 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "Excel数据分析".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 excel_read 读取Excel文件内容".into(), status: StepStatus::Pending, result: None },
-                        PlanStep { id: 2, task: "使用 excel_analyze 对数据进行统计分析".into(), status: StepStatus::Pending, result: None },
-                        PlanStep { id: 3, task: "使用 file_write 将分析结果写入文件".into(), status: StepStatus::Pending, result: None },
+                        PlanStep { id: 1, task: "使用 excel_read 读取Excel文件内容".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "使用 excel_analyze 对数据进行统计分析".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 3, task: "使用 file_write 将分析结果写入文件".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.85,
                     source: TemplateSource::Builtin,

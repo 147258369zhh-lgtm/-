@@ -16,8 +16,7 @@ import { TravelManager } from "./components/TravelManager";
 import { GridOverlay } from "./components/GridOverlay";
 import { Suspense, lazy } from "react";
 
-const AbilityManager = lazy(() => import("./components/AbilityManager"));
-const AgentManager = lazy(() => import("./components/AgentManager"));
+const AIHub = lazy(() => import("./components/AIHub"));
 
 function App() {
   const [activeTab, setActiveTab] = useState("projects");
@@ -384,25 +383,15 @@ function App() {
             </div>
           ) : activeTab === "templates" ? (
             <TemplateManager />
-          ) : activeTab === "ability" ? (
+          ) : activeTab === "aihub" ? (
             <Suspense
               fallback={
                 <div className="flex-1 flex items-center justify-center">
-                  Loading Ability Manager...
+                  Loading AI HUB...
                 </div>
               }
             >
-              <AbilityManager />
-            </Suspense>
-          ) : activeTab === "agents" ? (
-            <Suspense
-              fallback={
-                <div className="flex-1 flex items-center justify-center">
-                  Loading Agent Manager...
-                </div>
-              }
-            >
-              <AgentManager />
+              <AIHub />
             </Suspense>
           ) : activeTab === "common" ? (
             <CommonInfoManager />
