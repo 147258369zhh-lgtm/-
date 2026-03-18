@@ -1014,6 +1014,343 @@ pub async fn mcp_get_installed_skills(
     Ok(json!(installed))
 }
 
+// ═══════════════════════════════════════════════
+// Marketplace Integration — Smithery.ai + ClawHub
+// ═══════════════════════════════════════════════
+
+/// Search Smithery.ai MCP Server registry
+/// Smithery is the largest MCP marketplace (6000+ servers)
+#[tauri::command]
+pub async fn marketplace_search_smithery(keyword: String) -> Result<serde_json::Value, String> {
+    let query = if keyword.is_empty() { "server".to_string() } else { keyword.clone() };
+    let encoded = urlencoding::encode(&query);
+
+    // Smithery registry API — public endpoint, no API key needed for search
+    let url = format!(
+        "https://registry.smithery.ai/servers?q={}&pageSize=30",
+        encoded
+    );
+
+    let client = reqwest::Client::builder()
+        .user_agent("OpenClaw-AIHub/1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let resp = client.get(&url).send().await
+        .map_err(|e| format!("Smithery 搜索请求失败: {}", e))?;
+
+    if !resp.status().is_success() {
+        // Fallback: try alternative API path
+        let alt_url = format!(
+            "https://registry.smithery.ai/api/v1/servers?q={}&pageSize=30",
+            encoded
+        );
+        let alt_resp = client.get(&alt_url).send().await
+            .map_err(|e| format!("Smithery 备用搜索请求失败: {}", e))?;
+
+        if !alt_resp.status().is_success() {
+            return Err(format!("Smithery 搜索失败 (HTTP {})", alt_resp.status()));
+        }
+
+        let body: serde_json::Value = alt_resp.json().await
+            .map_err(|e| format!("解析 Smithery 响应失败: {}", e))?;
+
+        return parse_smithery_response(&body, &client).await;
+    }
+
+    let body: serde_json::Value = resp.json().await
+        .map_err(|e| format!("解析 Smithery 响应失败: {}", e))?;
+
+    parse_smithery_response(&body, &client).await
+}
+
+/// Parse Smithery API response into unified format
+async fn parse_smithery_response(
+    body: &serde_json::Value,
+    client: &reqwest::Client,
+) -> Result<serde_json::Value, String> {
+    // Smithery returns { servers: [...] } or directly [...]
+    let items = body.get("servers")
+        .and_then(|v| v.as_array())
+        .or_else(|| body.as_array());
+
+    let items = match items {
+        Some(arr) => arr.clone(),
+        None => {
+            // Maybe the response is a paginated object with "data" key
+            if let Some(arr) = body.get("data").and_then(|v| v.as_array()) {
+                arr.clone()
+            } else {
+                Vec::new()
+            }
+        }
+    };
+
+    // Collect descriptions for batch translation
+    let descriptions: Vec<String> = items.iter()
+        .map(|item| {
+            item.get("description")
+                .or(item.get("qualifiedName"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
+        .collect();
+
+    // Fire translation in parallel
+    let translation_futures: Vec<_> = descriptions.iter()
+        .map(|desc| {
+            let client_ref = client;
+            let desc_clone = desc.clone();
+            async move { translate_text(client_ref, &desc_clone).await }
+        })
+        .collect();
+
+    let translations = futures::future::join_all(translation_futures).await;
+
+    let results: Vec<serde_json::Value> = items.iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let name = item.get("qualifiedName")
+                .or(item.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let display_name = item.get("displayName")
+                .and_then(|v| v.as_str())
+                .unwrap_or(name);
+            let description = item.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let homepage = item.get("homepage")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let use_count = item.get("useCount")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+
+            let desc_zh = translations.get(i)
+                .cloned()
+                .flatten()
+                .unwrap_or_default();
+
+            json!({
+                "id": format!("smithery_{}", name.replace('/', "_")),
+                "name": display_name,
+                "description": description,
+                "translation": if desc_zh.is_empty() { serde_json::Value::Null } else { json!(desc_zh) },
+                "author": name.split('/').next().unwrap_or("unknown"),
+                "version": "latest",
+                "type": "mcp",
+                "downloads": use_count,
+                "installed": false,
+                "sourceUrl": homepage,
+                "npmPackage": name,
+                "installMethod": "npx",
+                "marketplace": "smithery"
+            })
+        })
+        .collect();
+
+    Ok(json!(results))
+}
+
+/// Search ClawHub / OpenClaw Skill ecosystem via GitHub API
+/// ClawHub hosts 67,000+ Skills in SKILL.md format
+#[tauri::command]
+pub async fn marketplace_search_clawhub(keyword: String) -> Result<serde_json::Value, String> {
+    let query = if keyword.is_empty() {
+        "claude-skill".to_string()
+    } else {
+        format!("{}+topic:claude-skill", keyword)
+    };
+
+    let url = format!(
+        "https://api.github.com/search/repositories?q={}&sort=stars&order=desc&per_page=30",
+        urlencoding::encode(&query)
+    );
+
+    let client = reqwest::Client::builder()
+        .user_agent("OpenClaw-AIHub/1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let resp = client.get(&url).send().await
+        .map_err(|e| format!("ClawHub 搜索请求失败: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("ClawHub 搜索失败 (HTTP {})", resp.status()));
+    }
+
+    let body: serde_json::Value = resp.json().await
+        .map_err(|e| format!("解析 ClawHub 响应失败: {}", e))?;
+
+    let items = body.get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // Batch translate descriptions
+    let descriptions: Vec<String> = items.iter()
+        .map(|item| {
+            item.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
+        .collect();
+
+    let translation_futures: Vec<_> = descriptions.iter()
+        .map(|desc| {
+            let client_ref = &client;
+            let desc_clone = desc.clone();
+            async move { translate_text(client_ref, &desc_clone).await }
+        })
+        .collect();
+
+    let translations = futures::future::join_all(translation_futures).await;
+
+    let results: Vec<serde_json::Value> = items.iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let name = item.get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let full_name = item.get("full_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(name);
+            let description = item.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No description");
+            let stars = item.get("stargazers_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let html_url = item.get("html_url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let author = item.get("owner")
+                .and_then(|o| o.get("login"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+
+            let desc_zh = translations.get(i)
+                .cloned()
+                .flatten()
+                .unwrap_or_default();
+
+            json!({
+                "id": format!("clawhub_{}", full_name.replace('/', "_")),
+                "name": name,
+                "description": description,
+                "translation": if desc_zh.is_empty() { serde_json::Value::Null } else { json!(desc_zh) },
+                "author": author,
+                "version": "latest",
+                "type": "skill",
+                "downloads": stars,
+                "installed": false,
+                "sourceUrl": html_url,
+                "npmPackage": serde_json::Value::Null,
+                "installMethod": "zip",
+                "marketplace": "clawhub"
+            })
+        })
+        .collect();
+
+    Ok(json!(results))
+}
+
+/// Unified marketplace search — aggregates all sources
+/// Searches: Smithery + ClawHub + Curated MCP list, deduplicates and sorts
+#[tauri::command]
+pub async fn marketplace_search_all(keyword: String) -> Result<serde_json::Value, String> {
+    // Fire all searches in parallel
+    let keyword_s = keyword.clone();
+    let keyword_c = keyword.clone();
+
+    let (smithery_result, clawhub_result, curated_result) = tokio::join!(
+        marketplace_search_smithery(keyword_s),
+        marketplace_search_clawhub(keyword_c),
+        async {
+            // Include curated MCP list (filtered by keyword)
+            let kw_lower = keyword.to_lowercase();
+            let curated: Vec<serde_json::Value> = get_curated_mcp_list()
+                .iter()
+                .enumerate()
+                .filter(|(_, mcp)| {
+                    kw_lower.is_empty()
+                        || mcp.name.to_lowercase().contains(&kw_lower)
+                        || mcp.description.to_lowercase().contains(&kw_lower)
+                        || mcp.description_zh.contains(&keyword)
+                })
+                .map(|(i, mcp)| {
+                    json!({
+                        "id": format!("curated_{}", i),
+                        "name": mcp.name,
+                        "description": mcp.description,
+                        "translation": mcp.description_zh,
+                        "author": mcp.author,
+                        "version": "1.0.0",
+                        "type": "mcp",
+                        "downloads": mcp.stars,
+                        "installed": false,
+                        "sourceUrl": mcp.source_url,
+                        "npmPackage": mcp.npm_package,
+                        "installMethod": mcp.install_method,
+                        "marketplace": "curated"
+                    })
+                })
+                .collect();
+            Ok::<Vec<serde_json::Value>, String>(curated)
+        }
+    );
+
+    let mut all_items: Vec<serde_json::Value> = Vec::new();
+    let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Helper: add items with dedup
+    let mut add_items = |items: Vec<serde_json::Value>| {
+        for item in items {
+            let key = item.get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !key.is_empty() && !seen_names.contains(&key) {
+                seen_names.insert(key);
+                all_items.push(item);
+            }
+        }
+    };
+
+    // Add curated first (highest quality, pre-translated)
+    if let Ok(curated) = curated_result {
+        add_items(curated);
+    }
+
+    // Add Smithery results
+    if let Ok(smithery_json) = smithery_result {
+        if let Some(arr) = smithery_json.as_array() {
+            add_items(arr.clone());
+        }
+    }
+
+    // Add ClawHub results
+    if let Ok(clawhub_json) = clawhub_result {
+        if let Some(arr) = clawhub_json.as_array() {
+            add_items(arr.clone());
+        }
+    }
+
+    // Sort by downloads/stars descending
+    all_items.sort_by(|a, b| {
+        let sa = a.get("downloads").and_then(|v| v.as_i64()).unwrap_or(0);
+        let sb = b.get("downloads").and_then(|v| v.as_i64()).unwrap_or(0);
+        sb.cmp(&sa)
+    });
+
+    Ok(json!(all_items))
+}
+
 #[tauri::command]
 pub async fn mcp_open_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]

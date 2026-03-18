@@ -138,6 +138,10 @@ pub fn run() {
             mcp::commands::mcp_get_installed_skills,
             mcp::commands::mcp_startup_all,
             mcp::commands::mcp_open_url,
+            // ── Marketplace Integration ──
+            mcp::commands::marketplace_search_smithery,
+            mcp::commands::marketplace_search_clawhub,
+            mcp::commands::marketplace_search_all,
             rag::index_document,
             rag::rag_query,
             rag::get_index_status,

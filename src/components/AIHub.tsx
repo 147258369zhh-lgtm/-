@@ -1451,7 +1451,7 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
   const [libFilter, setLibFilter] = useState('全部');
   const [libCatFilter, setLibCatFilter] = useState('全部');
 
-  // ── 网络搜索状态（MCP/Skill 用） ──
+  // ── 网络搜索状态（MCP/Skill/Library 用） ──
   const [npmResults, setNpmResults] = useState<any[]>([]);
   const [npmSearching, setNpmSearching] = useState(false);
   const [npmQuery, setNpmQuery] = useState('');
@@ -1461,6 +1461,9 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
   const [showManualImport, setShowManualImport] = useState(false);
   const [manualImportUrl, setManualImportUrl] = useState('');
   const [manualImporting, setManualImporting] = useState(false);
+  // ── 市场来源选择 ──
+  type MarketSource = 'all' | 'smithery' | 'clawhub' | 'npm';
+  const [marketSource, setMarketSource] = useState<MarketSource>('all');
 
   useEffect(() => {
     if (tab === 'library') {
@@ -1470,18 +1473,37 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
     }
   }, [tab]);
 
-  // ── 网络面板相关 ──
-  const showNetworkPanel = tab === 'mcp' || tab === 'skill';
+  // ── 网络面板相关（MCP/Skill/Library 都显示） ──
+  const showNetworkPanel = tab === 'mcp' || tab === 'skill' || tab === 'library';
 
   const handleNpmSearch = async () => {
-    const q = npmQuery.trim() || (tab === 'mcp' ? 'mcp-server' : 'ai agent skill function tool');
+    const q = npmQuery.trim() || (tab === 'mcp' ? 'mcp-server' : tab === 'library' ? 'server' : 'ai agent skill function tool');
     setNpmSearching(true);
     setNpmTranslations({});
     try {
-      const results: any = await invoke('registry_search_npm', { keyword: q });
-      if (Array.isArray(results)) {
-        setNpmResults(results);
-        // 后台翻译描述（不阻塞渲染）
+      let results: any[] = [];
+
+      // 根据市场来源决定调用哪个 API
+      if (marketSource === 'smithery') {
+        const raw: any = await invoke('marketplace_search_smithery', { keyword: q });
+        results = Array.isArray(raw) ? raw : [];
+      } else if (marketSource === 'clawhub') {
+        const raw: any = await invoke('marketplace_search_clawhub', { keyword: q });
+        results = Array.isArray(raw) ? raw : [];
+      } else if (marketSource === 'npm') {
+        // 原有 npm 搜索
+        const raw: any = await invoke('registry_search_npm', { keyword: q });
+        results = Array.isArray(raw) ? raw.map((p: any) => ({ ...p, marketplace: 'npm', installMethod: 'npm' })) : [];
+      } else {
+        // 'all' — 聚合搜索
+        const raw: any = await invoke('marketplace_search_all', { keyword: q });
+        results = Array.isArray(raw) ? raw : [];
+      }
+
+      setNpmResults(results);
+
+      // 翻译描述（市场 API 结果已带 translation 字段，仅 npm 需要翻译）
+      if (marketSource === 'npm' || (!results[0]?.translation && results.length > 0)) {
         const descs = results.map((p: any) => p.description || '');
         invoke('registry_translate_batch', { texts: descs }).then((translations: any) => {
           if (Array.isArray(translations)) {
@@ -1492,16 +1514,22 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
             setNpmTranslations(map);
           }
         }).catch(() => {
-          // 翻译失败，用关键词翻译作为 fallback
           const map: Record<string, string> = {};
           results.forEach((p: any) => {
-            map[p.name] = translateNpmDesc('', p.description || '');
+            map[p.name] = p.translation || translateNpmDesc('', p.description || '');
           });
           setNpmTranslations(map);
         });
+      } else {
+        // 市场 API 已有翻译
+        const map: Record<string, string> = {};
+        results.forEach((p: any) => {
+          map[p.name] = p.translation || translateNpmDesc('', p.description || '');
+        });
+        setNpmTranslations(map);
       }
     } catch (e) {
-      console.error('npm search failed:', e);
+      console.error('marketplace search failed:', e);
       setNpmResults([]);
     } finally {
       setNpmSearching(false);
@@ -1509,24 +1537,41 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
   };
 
   const handleNpmInstall = async (pkg: any) => {
-    setNpmInstalling(pkg.npm_package);
+    const installKey = pkg.npm_package || pkg.name;
+    setNpmInstalling(installKey);
     try {
-      await invoke('mcp_install_from_source', {
-        sourceUrl: pkg.npm_package,
-        name: pkg.name,
-      });
+      // Marketplace items may use different install methods
+      const installMethod = pkg.installMethod || 'npm';
+      const sourceUrl = pkg.sourceUrl || pkg.npm_package || pkg.name;
+
+      if (installMethod === 'zip' && pkg.sourceUrl) {
+        // GitHub ZIP download (ClawHub skills)
+        await invoke('mcp_install_from_source', {
+          sourceUrl: pkg.sourceUrl,
+          name: pkg.name,
+        });
+      } else {
+        // npm install (Smithery, npm, curated)
+        await invoke('mcp_install_from_source', {
+          sourceUrl: pkg.npm_package || pkg.name,
+          name: pkg.name,
+        });
+      }
+
+      // Register in plugin registry
       const entry = JSON.stringify({
-        id: `npm_${pkg.npm_package.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        id: `${pkg.marketplace || 'npm'}_${(pkg.npm_package || pkg.name).replace(/[^a-zA-Z0-9]/g, '_')}`,
         name: pkg.name, name_zh: pkg.name,
-        description: pkg.description || '', description_zh: pkg.description || '',
-        component_type: tab === 'mcp' ? 'mcp' : 'skill',
+        description: pkg.description || '', description_zh: pkg.translation || pkg.description || '',
+        component_type: pkg.type === 'skill' ? 'skill' : 'mcp',
         source: 'network', status: 'enabled',
         version: pkg.version || '0.0.0', author: pkg.author || 'unknown',
-        category: tab, icon: tab === 'mcp' ? 'server' : 'wrench',
+        category: pkg.type === 'skill' ? 'skill' : 'mcp',
+        icon: pkg.type === 'skill' ? 'wrench' : 'server',
         install_path: null, launch_command: null, launch_args: null,
         config: {}, created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        source_url: pkg.repo_url || pkg.npm_url || null,
+        source_url: sourceUrl,
         npm_package: pkg.npm_package,
       });
       await invoke('registry_install', { entryJson: entry });
@@ -1969,12 +2014,28 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Globe size={13} color={tabConfig.color} />
-                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)' }}>网络组件</span>
-                <span style={{
-                  fontSize: 8, padding: '1px 5px', borderRadius: 4,
-                  background: `${tabConfig.color}15`, color: tabConfig.color,
-                  fontWeight: 700, marginLeft: 'auto',
-                }}>NPM</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)' }}>技能市场</span>
+              </div>
+              {/* 市场来源切换 */}
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                {([
+                  { id: 'all' as MarketSource, label: '全部', color: tabConfig.color },
+                  { id: 'smithery' as MarketSource, label: 'Smithery', color: '#6366f1' },
+                  { id: 'clawhub' as MarketSource, label: 'ClawHub', color: '#f59e0b' },
+                  { id: 'npm' as MarketSource, label: 'npm', color: '#cb3837' },
+                ]).map(src => (
+                  <button
+                    key={src.id}
+                    onClick={() => { setMarketSource(src.id); setNpmResults([]); setNpmTranslations({}); }}
+                    style={{
+                      padding: '2px 8px', borderRadius: 6, border: 'none',
+                      fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                      background: marketSource === src.id ? `${src.color}22` : 'transparent',
+                      color: marketSource === src.id ? src.color : 'var(--text-faint)',
+                      transition: 'all 0.2s',
+                    }}
+                  >{src.label}</button>
+                ))}
               </div>
 
               {/* 手动导入区 */}
@@ -2095,10 +2156,23 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
                         transition: 'all 0.2s',
                       }}>{pkg.name}</div>
+                      {/* 市场来源标签 */}
+                      {pkg.marketplace && (
+                        <span style={{
+                          fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                          background: pkg.marketplace === 'smithery' ? '#6366f120' :
+                                     pkg.marketplace === 'clawhub' ? '#f59e0b20' :
+                                     pkg.marketplace === 'curated' ? '#10b98120' : '#cb383720',
+                          color: pkg.marketplace === 'smithery' ? '#6366f1' :
+                                 pkg.marketplace === 'clawhub' ? '#f59e0b' :
+                                 pkg.marketplace === 'curated' ? '#10b981' : '#cb3837',
+                          flexShrink: 0, textTransform: 'uppercase',
+                        }}>{pkg.marketplace === 'curated' ? '精选' : pkg.marketplace}</span>
+                      )}
                       {/* 右上角：打开原网址 */}
-                      {(pkg.npm_url || pkg.repo_url) && (
+                      {(pkg.npm_url || pkg.repo_url || pkg.sourceUrl) && (
                         <a
-                          href={pkg.npm_url || pkg.repo_url}
+                          href={pkg.npm_url || pkg.repo_url || pkg.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={e => e.stopPropagation()}
@@ -2144,30 +2218,32 @@ const HubList = ({ tab, items, onEdit, onNew, onDelete, onRun }: {
                         <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'monospace' }}>v{pkg.version}</span>
                           <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>作者: {pkg.author}</span>
+                          {pkg.downloads > 0 && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>⭐ {pkg.downloads}</span>}
                           {pkg.npm_url && <a href={pkg.npm_url} target="_blank" style={{ fontSize: 9, color: tabConfig.color, textDecoration: 'none' }}>npm ↗</a>}
                           {pkg.repo_url && <a href={pkg.repo_url} target="_blank" style={{ fontSize: 9, color: tabConfig.color, textDecoration: 'none' }}>源码 ↗</a>}
+                          {!pkg.npm_url && !pkg.repo_url && pkg.sourceUrl && <a href={pkg.sourceUrl} target="_blank" style={{ fontSize: 9, color: tabConfig.color, textDecoration: 'none' }}>主页 ↗</a>}
                         </div>
                       </div>
                     )}
 
                     {/* 底部操作栏 */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      {!isHovered && <span style={{ fontSize: 8, color: 'var(--text-faint)', fontFamily: 'monospace' }}>v{pkg.version}</span>}
-                      {isHovered && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{pkg.npm_package}</span>}
+                      {!isHovered && <span style={{ fontSize: 8, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{pkg.downloads > 0 ? `⭐${pkg.downloads}` : `v${pkg.version}`}</span>}
+                      {isHovered && <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{pkg.npm_package || pkg.name}</span>}
                       <button
                         onClick={() => handleNpmInstall(pkg)}
-                        disabled={npmInstalling === pkg.npm_package}
+                        disabled={npmInstalling === (pkg.npm_package || pkg.name)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 3,
                           padding: isHovered ? '4px 14px' : '3px 10px',
                           borderRadius: 6, border: 'none',
-                          background: npmInstalling === pkg.npm_package ? 'var(--bg-muted)' : isHovered ? tabConfig.color : `${tabConfig.color}15`,
-                          color: npmInstalling === pkg.npm_package ? 'var(--text-faint)' : isHovered ? '#fff' : tabConfig.color,
+                          background: npmInstalling === (pkg.npm_package || pkg.name) ? 'var(--bg-muted)' : isHovered ? tabConfig.color : `${tabConfig.color}15`,
+                          color: npmInstalling === (pkg.npm_package || pkg.name) ? 'var(--text-faint)' : isHovered ? '#fff' : tabConfig.color,
                           fontSize: isHovered ? 11 : 10, fontWeight: 700, cursor: 'pointer',
                           transition: 'all 0.2s',
                         }}
                       >
-                        {npmInstalling === pkg.npm_package
+                        {npmInstalling === (pkg.npm_package || pkg.name)
                           ? <><Loader2 size={9} style={{ animation: 'spin 0.8s linear infinite' }} /> 安装中</>
                           : <><Download size={isHovered ? 11 : 9} /> 安装</>
                         }
