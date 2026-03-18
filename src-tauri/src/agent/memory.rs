@@ -1,131 +1,168 @@
-use super::types::PlanStep;
+use super::types::*;
+use crate::app_log;
 
-// ═══════════════════════════════════════════════
-// Memory Engine — persists agent state to SQLite
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// Agent V5 — Memory System
+// Dual-layer memory:
+//   Short-term: SessionState.messages (in-memory, context window)
+//   Long-term:  SQLite `agent_experiences` table (persistent)
+// ═══════════════════════════════════════════════════════════════
 
-/// Save a message to agent_memory
-pub async fn save_memory(
-    pool: &sqlx::SqlitePool,
-    task_id: &str,
-    round: u32,
-    role: &str,
-    content: Option<&str>,
-    tool_call_id: Option<&str>,
-    tool_name: Option<&str>,
-) {
+// ─── Schema ───────────────────────────────────────────────────────
+
+pub async fn ensure_schema(pool: &sqlx::SqlitePool) {
+    // Experience log
     let _ = sqlx::query(
-        "INSERT INTO agent_memory (id, task_id, round, role, content, tool_call_id, tool_name) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    )
-    .bind(uuid::Uuid::new_v4().to_string())
-    .bind(task_id)
-    .bind(round)
-    .bind(role)
-    .bind(content)
-    .bind(tool_call_id)
-    .bind(tool_name)
-    .execute(pool)
-    .await;
-}
-
-/// Update working memory key-value
-pub async fn update_working_memory(pool: &sqlx::SqlitePool, task_id: &str, key: &str, value: &str) {
-    let _ = sqlx::query(
-        "INSERT OR REPLACE INTO agent_working_memory (id, task_id, key, value) VALUES (?, ?, ?, ?)",
-    )
-    .bind(format!("{}_{}", task_id, key))
-    .bind(task_id)
-    .bind(key)
-    .bind(value)
-    .execute(pool)
-    .await;
-}
-
-/// Update task status
-pub async fn update_task_status(
-    pool: &sqlx::SqlitePool,
-    task_id: &str,
-    status: &str,
-    current_step: u32,
-    final_result: Option<&str>,
-) {
-    let _ = sqlx::query(
-        "UPDATE agent_tasks SET status = ?, current_step = ?, final_result = ?, updated_at = datetime('now') WHERE id = ?"
-    )
-    .bind(status).bind(current_step).bind(final_result).bind(task_id)
-    .execute(pool).await;
-}
-
-/// Save a plan step result to agent_steps
-pub async fn save_step_result(pool: &sqlx::SqlitePool, task_id: &str, step: &PlanStep) {
-    let status_str = match step.status {
-        super::types::StepStatus::Pending => "pending",
-        super::types::StepStatus::Running => "running",
-        super::types::StepStatus::Done => "done",
-        super::types::StepStatus::Failed => "failed",
-    };
-    let _ = sqlx::query(
-        "INSERT OR REPLACE INTO agent_steps (id, task_id, step_index, task, status, result, created_at) \
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
-    )
-    .bind(format!("{}_{}", task_id, step.id))
-    .bind(task_id)
-    .bind(step.id)
-    .bind(&step.task)
-    .bind(status_str)
-    .bind(step.result.as_deref())
-    .execute(pool)
-    .await;
-}
-
-/// Save plan JSON to agent_plans
-pub async fn save_plan(pool: &sqlx::SqlitePool, task_id: &str, plan_json: &str) {
-    let _ = sqlx::query(
-        "INSERT OR REPLACE INTO agent_plans (task_id, plan_json, created_at) VALUES (?, ?, datetime('now'))"
-    )
-    .bind(task_id)
-    .bind(plan_json)
-    .execute(pool)
-    .await;
-}
-
-/// Summarize completed steps into a final answer
-pub fn summarize_results(completed: &[PlanStep]) -> String {
-    completed
-        .iter()
-        .filter_map(|s| {
-            s.result
-                .as_ref()
-                .map(|r| format!("{}. {} → {}", s.id, s.task, r))
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-/// Ensure new v2 tables exist
-pub async fn ensure_v2_tables(pool: &sqlx::SqlitePool) {
-    let _ = sqlx::query(
-        "CREATE TABLE IF NOT EXISTS agent_steps (
+        "CREATE TABLE IF NOT EXISTS agent_experiences (
             id TEXT PRIMARY KEY,
-            task_id TEXT NOT NULL,
-            step_index INTEGER NOT NULL,
-            task TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            result TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            UNIQUE(task_id, step_index)
-        )",
-    )
-    .execute(pool)
-    .await;
+            goal TEXT NOT NULL,
+            tool_sequence TEXT,
+            success INTEGER NOT NULL DEFAULT 0,
+            rounds INTEGER NOT NULL DEFAULT 0,
+            final_answer TEXT,
+            tags TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )"
+    ).execute(pool).await;
+
+    // Blueprint table (V2 schema with complexity + tags)
+    let _ = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS agent_blueprints (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            persona TEXT,
+            goal_template TEXT,
+            workflow_json TEXT,
+            complexity INTEGER DEFAULT 1,
+            tags TEXT DEFAULT '[]',
+            version TEXT DEFAULT '2.0',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )"
+    ).execute(pool).await;
+
+    // Add new columns if upgrading from V1 (ignore errors)
+    let _ = sqlx::query("ALTER TABLE agent_blueprints ADD COLUMN complexity INTEGER DEFAULT 1")
+        .execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE agent_blueprints ADD COLUMN tags TEXT DEFAULT '[]'")
+        .execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE agent_blueprints ADD COLUMN version TEXT DEFAULT '2.0'")
+        .execute(pool).await;
+}
+
+// ─── Save Experience (Long-term Memory) ───────────────────────────
+
+/// Called when a ReAct session completes. Persists the session
+/// outcome so it can be retrieved as few-shot context in future runs.
+pub async fn save_experience(
+    session: &SessionState,
+    final_answer: &str,
+    pool: &sqlx::SqlitePool,
+) {
+    // Extract which tools were called (in order)
+    let tool_sequence: Vec<String> = session.messages.iter()
+        .filter(|m| m.role == MessageRole::Assistant)
+        .filter_map(|m| m.tool_calls.as_ref())
+        .flat_map(|calls| calls.iter().map(|c| c.function.name.clone()))
+        .collect();
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let tool_seq_str = tool_sequence.join(",");
+    let tags = extract_tags(&session.goal, &tool_sequence);
+    let tags_str = serde_json::to_string(&tags).unwrap_or("[]".into());
+    let success = if final_answer.contains("失败") || final_answer.contains("error") { 0i64 } else { 1i64 };
 
     let _ = sqlx::query(
-        "CREATE TABLE IF NOT EXISTS agent_plans (
-            task_id TEXT PRIMARY KEY,
-            plan_json TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now'))
-        )",
+        "INSERT INTO agent_experiences (id, goal, tool_sequence, success, rounds, final_answer, tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
-    .execute(pool)
-    .await;
+    .bind(&id)
+    .bind(&session.goal)
+    .bind(&tool_seq_str)
+    .bind(success)
+    .bind(session.round as i64)
+    .bind(&final_answer[..final_answer.len().min(1000)])
+    .bind(&tags_str)
+    .execute(pool).await;
+
+    app_log!("MEMORY", "Saved experience {} (success={}, rounds={}, tools={})",
+             &id[..8], success, session.round, tool_sequence.len());
+}
+
+// ─── Retrieve Similar Experiences (Few-shot hints) ────────────────
+
+/// Retrieve up to 3 recent successful experiences that share tags with `goal`.
+/// Returns a formatted string suitable for injection into the system prompt.
+pub async fn retrieve_similar(goal: &str, pool: &sqlx::SqlitePool) -> Option<String> {
+    let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
+        "SELECT goal, tool_sequence, final_answer, rounds
+         FROM agent_experiences
+         WHERE success = 1
+         ORDER BY created_at DESC
+         LIMIT 5"
+    )
+    .fetch_all(pool).await.ok()?;
+
+    if rows.is_empty() {
+        return None;
+    }
+
+    // Simple keyword overlap to find relevant ones
+    let goal_words: std::collections::HashSet<&str> = goal.split_whitespace().collect();
+    let mut scored: Vec<(usize, &(String, String, String, i64))> = rows.iter()
+        .map(|r| {
+            let row_words: std::collections::HashSet<&str> = r.0.split_whitespace().collect();
+            let overlap = goal_words.intersection(&row_words).count();
+            (overlap, r)
+        })
+        .filter(|(score, _)| *score > 0)
+        .collect();
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+
+    let top3: Vec<String> = scored.into_iter().take(3).map(|(_, r)| {
+        format!("- 目标: {}\n  工具链: {}\n  用时: {} 轮", r.0, r.1, r.3)
+    }).collect();
+
+    if top3.is_empty() {
+        None
+    } else {
+        Some(top3.join("\n"))
+    }
+}
+
+// ─── List Experiences for Frontend ────────────────────────────────
+
+pub async fn list_experiences(pool: &sqlx::SqlitePool) -> Vec<ExperienceInfo> {
+    let rows: Vec<(String, String, i64, i64, String)> = sqlx::query_as(
+        "SELECT id, goal, success, rounds, created_at FROM agent_experiences ORDER BY created_at DESC LIMIT 50"
+    ).fetch_all(pool).await.unwrap_or_default();
+
+    rows.into_iter().map(|(id, goal, success, rounds, created_at)| {
+        ExperienceInfo {
+            id,
+            task_summary: goal.chars().take(80).collect(),
+            intent: "task".into(),
+            success: success == 1,
+            score: ExperienceScore {
+                accuracy: if success == 1 { 1.0 } else { 0.0 },
+                efficiency: (1.0 / rounds.max(1) as f32).min(1.0),
+                tool_usage: 0.8,
+            },
+            created_at,
+        }
+    }).collect()
+}
+
+// ─── Internal Helpers ─────────────────────────────────────────────
+
+fn extract_tags(goal: &str, tools: &[String]) -> Vec<String> {
+    let mut tags = vec![];
+    if tools.iter().any(|t| t.contains("word") || t.contains("file")) { tags.push("文档".into()); }
+    if tools.iter().any(|t| t.contains("excel")) { tags.push("数据".into()); }
+    if tools.iter().any(|t| t.contains("ppt")) { tags.push("演示".into()); }
+    if tools.iter().any(|t| t.contains("web") || t.contains("scrape")) { tags.push("网络".into()); }
+    if tools.iter().any(|t| t.contains("shell")) { tags.push("系统".into()); }
+    if goal.contains("报告") || goal.contains("分析") { tags.push("报告".into()); }
+    if goal.contains("通信") || goal.contains("项目") { tags.push("通信项目".into()); }
+    tags
 }
