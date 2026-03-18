@@ -104,26 +104,53 @@ pub fn transform_args_for_fallback(
             match template.as_str() {
                 "cmd_fallback" => {
                     // Convert PowerShell command to cmd
-                    let cmd = original_args["command"].as_str().unwrap_or("");
+                    let cmd = original_args.get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if cmd.is_empty() {
+                        // 无法提取命令，返回原始参数避免 "missing command" 错误
+                        return original_args.clone();
+                    }
                     serde_json::json!({
                         "command": format!("cmd /c {}", cmd)
                     })
                 }
                 "word_to_txt" => {
-                    let title = original_args["title"].as_str().unwrap_or("文档");
-                    let content = original_args["content"].as_str().unwrap_or("");
-                    let path = original_args["output_path"].as_str().unwrap_or("")
-                        .replace(".docx", ".txt");
+                    let title = original_args.get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("文档");
+                    let content = original_args.get("content")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    // 支持多种路径字段名
+                    let path = original_args.get("output_path")
+                        .or_else(|| original_args.get("path"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if path.is_empty() {
+                        return original_args.clone();
+                    }
+                    let path = path.replace(".docx", ".txt");
                     serde_json::json!({
                         "path": path,
                         "content": format!("{}\n\n{}", title, content)
                     })
                 }
                 "excel_to_csv" => {
-                    let headers = original_args["headers"].as_str().unwrap_or("");
-                    let rows = original_args["rows"].as_str().unwrap_or("");
-                    let path = original_args["output_path"].as_str().unwrap_or("")
-                        .replace(".xlsx", ".csv").replace(".xls", ".csv");
+                    let headers = original_args.get("headers")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let rows = original_args.get("rows")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let path = original_args.get("output_path")
+                        .or_else(|| original_args.get("path"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if path.is_empty() {
+                        return original_args.clone();
+                    }
+                    let path = path.replace(".xlsx", ".csv").replace(".xls", ".csv");
                     let mut csv_content = headers.to_string();
                     for row in rows.split("|||") {
                         let row = row.trim();
@@ -138,7 +165,12 @@ pub fn transform_args_for_fallback(
                     })
                 }
                 "web_to_curl" => {
-                    let url = original_args["url"].as_str().unwrap_or("");
+                    let url = original_args.get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if url.is_empty() {
+                        return original_args.clone();
+                    }
                     serde_json::json!({
                         "command": format!("curl -s -L --max-time 10 \"{}\"", url)
                     })

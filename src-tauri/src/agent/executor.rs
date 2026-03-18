@@ -92,6 +92,9 @@ pub async fn execute_step(
     let mut tool_fail_count = 0u32;  // Per-step tool failure counter
     let max_tool_failures = 2u32;    // Max 2 failures per step, then force-skip
 
+    // Bug 3 fix: 重复行为检测 — 跟踪最近工具调用签名
+    let mut recent_tool_signatures: Vec<String> = Vec::new();
+
     for _tool_round in 0..6 {
         // ── Context compression via context_manager ──
         super::context_manager::compress_messages(&mut ctx.messages);
@@ -202,6 +205,33 @@ pub async fn execute_step(
                 let args: Value = serde_json::from_str(args_str).unwrap_or(json!({}));
 
                 app_log!("EXECUTOR", "[step {}] TOOL: {} args={}", step.id, tool_name, &args_str[..args_str.len().min(500)]);
+
+                // Bug 3 fix: 重复行为检测
+                let sig = format!("{}:{}", tool_name, &args_str[..args_str.len().min(80)]);
+                recent_tool_signatures.push(sig.clone());
+                let repeat_count = recent_tool_signatures.iter().filter(|s| {
+                    // 同一工具名即视为相似调用
+                    s.starts_with(&format!("{}:", tool_name))
+                }).count();
+                if repeat_count >= 3 {
+                    app_log!("EXECUTOR", "[step {}] ⛔ REPETITION DETECTED: {} called {} times, breaking loop",
+                        step.id, tool_name, repeat_count);
+                    let repeat_step = AgentStep {
+                        round: step.id,
+                        step_type: "reflection".into(),
+                        tool_name: Some(tool_name.to_string()),
+                        tool_args: None, tool_result: None,
+                        content: Some(format!("⛔ 检测到重复行为: `{}` 已被调用 {} 次，终止循环", tool_name, repeat_count)),
+                        duration_ms: None,
+                    };
+                    let _ = app_handle.emit("agent-event", AgentEvent {
+                        event_type: "reflection".into(),
+                        step: Some(repeat_step.clone()),
+                        message: Some(format!("重复检测: {} 被调用 {} 次", tool_name, repeat_count)),
+                    });
+                    steps_log.push(repeat_step);
+                    return Err(format!("工具 {} 重复调用 {} 次，步骤终止", tool_name, repeat_count));
+                }
 
                 // Emit tool_call event
                 let call_step = AgentStep {

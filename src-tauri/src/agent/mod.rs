@@ -351,12 +351,28 @@ pub async fn agent_run(
         .map(|t| t.function.name.clone())
         .collect();
     let plan_issues = planner::validate_plan(&plan, &tool_names, Some(&done_spec));
+    let mut plan = plan; // make mutable for potential replan
     if !plan_issues.is_empty() {
-        app_log!("AGENT", "⚠️ Plan Critic found {} issues:", plan_issues.len());
+        app_log!("AGENT", "⚠️ Plan Critic found {} issues, triggering auto-replan:", plan_issues.len());
         for issue in &plan_issues {
             app_log!("AGENT", "  - {}", issue);
         }
-        // 目前仅记录 warning，不阻断执行（后续可增加重新生成逻辑）
+        // 自动重新规划：将可用工具列表和错误信息一起传给 planner
+        let replan_hint = format!(
+            "上一次规划有问题: {}\n你只能使用以下工具: {}\n请重新规划。",
+            plan_issues.join("; "),
+            tool_names.join(", ")
+        );
+        let augmented_goal = format!("{}\n\n{}", goal, replan_hint);
+        if let Ok(new_plan) = planner::generate_plan_with_experience(
+            &llm, &client, &augmented_goal, &tool_descriptions,
+            &*pool, &structured_task.intent, &structured_task.keywords,
+        ).await {
+            app_log!("AGENT", "✅ Auto-replan succeeded: {} steps", new_plan.steps.len());
+            plan = new_plan;
+        } else {
+            app_log!("AGENT", "⚠️ Auto-replan failed, proceeding with original plan");
+        }
     } else {
         app_log!("AGENT", "✅ Plan Critic: all checks passed");
     }

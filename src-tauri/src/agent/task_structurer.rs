@@ -17,42 +17,53 @@ pub fn tools_for_intent_pub(intent: &TaskIntent) -> Vec<&'static str> {
 }
 
 /// Intent-to-tools mapping: which tools are relevant for each intent
+/// 每个意图都包含核心基础工具 (shell_run, file_create, date_now)
 fn tools_for_intent(intent: &TaskIntent) -> Vec<&'static str> {
-    match intent {
+    // 所有意图都需要的基础工具
+    let mut tools: Vec<&'static str> = vec![
+        "shell_run", "file_create", "file_read", "file_write",
+        "file_list", "date_now",
+    ];
+
+    let extra = match intent {
         TaskIntent::InformationGathering => vec![
             "web_scrape", "browser_navigate", "browser_script",
-            "file_write", "file_read", "translate_text",
+            "translate_text",
         ],
         TaskIntent::DataAnalysis => vec![
             "excel_read", "excel_write", "excel_analyze",
             "csv_to_excel", "data_merge", "table_transform",
-            "chart_generate", "file_read", "file_write",
-            "json_process",
+            "chart_generate", "json_process",
         ],
         TaskIntent::DocumentGeneration => vec![
             "word_write", "word_read", "ppt_create", "ppt_read",
             "pdf_read", "report_generate", "doc_convert",
-            "markdown_convert", "file_write", "file_read",
+            "markdown_convert", "excel_read", "excel_write",
             "chart_generate", "image_process",
         ],
         TaskIntent::FileOperation => vec![
-            "file_read", "file_write", "file_create", "file_delete",
-            "file_move", "file_list", "file_search",
+            "file_delete", "file_move", "file_search",
             "compress_archive",
         ],
         TaskIntent::SystemCommand => vec![
-            "shell_run", "file_read", "file_write", "file_list",
+            "file_search",
         ],
         TaskIntent::ContentCreation => vec![
-            "translate_text", "file_write", "file_read",
-            "markdown_convert", "qrcode_generate",
+            "translate_text", "markdown_convert", "qrcode_generate",
             "image_process",
         ],
         TaskIntent::Unknown => vec![
-            "file_read", "file_write", "file_list",
-            "shell_run", "web_scrape",
+            "web_scrape", "excel_read", "word_write",
         ],
+    };
+
+    for t in extra {
+        if !tools.contains(&t) {
+            tools.push(t);
+        }
     }
+
+    tools
 }
 
 /// Classify intent from keywords (fast path, no LLM needed)
