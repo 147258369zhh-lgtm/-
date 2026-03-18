@@ -169,6 +169,11 @@ const HubNode = ({ data, selected, type }: any) => {
         </div>
       </div>
       {data.detail && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>{data.detail}</div>}
+      {testStatus === 'error' && data._errorMsg && (
+        <div style={{ fontSize: 9, color: '#ef4444', marginTop: 4, lineHeight: 1.3, background: '#ef444410', padding: '3px 6px', borderRadius: 6 }}>
+          ⚠ {data._errorMsg}
+        </div>
+      )}
       <Handle type="source" position={Position.Right} style={{
         width: 10, height: 10, background: config.color,
         border: '2px solid var(--bg-surface)', borderRadius: '50%',
@@ -1076,20 +1081,36 @@ ${prevErrorsCtx}
 
       // 更新最终状态
       const finalStatus = result.success ? 'done' : 'error';
+      const errorMsg = result.success ? '' : (result.final_answer || '执行失败');
       setTestLogs(prev => [...prev, {
         nodeId: 'final', label: result.success ? '✅ 执行成功' : '❌ 执行失败',
         status: finalStatus,
         message: `${result.final_answer?.slice(0, 300) || '无结果'} (共 ${result.total_rounds} 步)`,
         time: new Date().toLocaleTimeString(),
       }]);
-      setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, _testStatus: finalStatus } })));
+      // 精确: 成功的节点保持绿色，未完成的标记最终状态
+      setNodes(nds => nds.map(n => {
+        if (n.data?._testStatus === 'done') return n; // 已完成的保持绿
+        if (n.type === 'hub-start' || n.type === 'hub-end') {
+          return { ...n, data: { ...n.data, _testStatus: finalStatus } };
+        }
+        if (n.type === 'hub-tool') {
+          return { ...n, data: { ...n.data, _testStatus: finalStatus, _errorMsg: finalStatus === 'error' ? errorMsg.slice(0, 80) : undefined } };
+        }
+        return n;
+      }));
     } catch (e: any) {
+      const errStr = String(e);
       setTestLogs(prev => [...prev, {
         nodeId: 'error', label: '❌ Agent 执行失败', status: 'error',
-        message: String(e),
+        message: errStr,
         time: new Date().toLocaleTimeString(),
       }]);
-      setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, _testStatus: 'error' } })));
+      // 只标记未完成的节点为错误，已完成的保持绿色
+      setNodes(nds => nds.map(n => {
+        if (n.data?._testStatus === 'done') return n;
+        return { ...n, data: { ...n.data, _testStatus: 'error', _errorMsg: errStr.slice(0, 80) } };
+      }));
     } finally {
       unlisten();
       setIsTesting(false);
@@ -1207,8 +1228,12 @@ ${prevErrorsCtx}
                   if (!genPrompt.trim() || isPreOptimizing) return;
                   setIsPreOptimizing(true);
                   try {
-                    const result: any = await invoke('ai_chat', {
-                      prompt: `你是 Agent 需求架构师。请优化以下用户的 Agent 描述，使其更精确、结构化、可执行。\n\n原始描述："${genPrompt}"\n\n要求：\n1. 明确输入输出\n2. 拆解为可执行步骤\n3. 指定关键参数（如文件路径、格式）\n4. 保持简洁，不超过3句话\n5. 只返回优化后的描述文字，不要其他说明`,
+                    const result: any = await invoke('chat_with_ai', {
+                      req: {
+                        prompt: `你是 Agent 需求架构师。请优化以下用户的 Agent 描述，使其更精确、结构化、可执行。\n\n原始描述："${genPrompt}"\n\n要求：\n1. 明确输入输出\n2. 拆解为可执行步骤\n3. 指定关键参数（如文件路径、格式）\n4. 保持简洁，不超过3句话\n5. 只返回优化后的描述文字，不要其他说明`,
+                        system_prompt: '你是一个专业的 Agent 需求分析师，擅长将模糊描述转化为精确可执行的技术规格。',
+                        module: 'agent_optimize',
+                      }
                     });
                     const text = typeof result === 'string' ? result : result?.content || result?.text || JSON.stringify(result);
                     setOptimizedPrompt(text.replace(/^["']|["']$/g, '').trim());
