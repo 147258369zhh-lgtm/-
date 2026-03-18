@@ -89,10 +89,20 @@ pub async fn generate_plan_with_experience(
         request = request.header("Authorization", format!("Bearer {}", llm.api_key));
     }
 
-    let resp = request.send().await.map_err(|e| {
-        app_log!("PLANNER", "HTTP request FAILED: {}", e);
-        format!("规划请求失败: {}", e)
-    })?;
+    let resp = match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        request.send()
+    ).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            app_log!("PLANNER", "HTTP request FAILED: {}", e);
+            return Err(format!("规划请求失败: {}", e));
+        }
+        Err(_) => {
+            app_log!("PLANNER", "⏰ TIMEOUT: LLM planner call exceeded 60s");
+            return Err("规划超时: LLM 响应超过 60 秒，请检查网络连接或更换模型".into());
+        }
+    };
 
     if !resp.status().is_success() {
         let body = resp.text().await.unwrap_or_default();

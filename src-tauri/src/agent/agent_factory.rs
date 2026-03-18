@@ -42,7 +42,9 @@ pub async fn create_blueprint(
   "persona": "角色描述（一句话，说明该Agent的核心能力）",
   "goal_template": "目标模板（用 {{{{input}}}} 表示用户输入）",
   "workflow": [
-    {{"step": "步骤描述", "tool": "推荐工具名", "fallback": "备选工具名（可选）"}}
+    {{"step": "步骤描述", "tool": "推荐工具名", "fallback": "备选工具名（可选）",
+      "args": {{"key": "value"}},
+      "expected_output": "预期结果描述"}}
   ],
   "success_criteria": ["具体的、可验证的成功标准"],
   "output_spec": {{

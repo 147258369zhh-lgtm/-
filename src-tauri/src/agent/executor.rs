@@ -117,10 +117,17 @@ pub async fn execute_step(
             request = request.header("Authorization", format!("Bearer {}", llm.api_key));
         }
 
-        let resp = request
-            .send()
-            .await
-            .map_err(|e| format!("LLM 请求失败: {}", e))?;
+        let resp = match tokio::time::timeout(
+            std::time::Duration::from_secs(90),
+            request.send()
+        ).await {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => return Err(format!("LLM 请求失败: {}", e)),
+            Err(_) => {
+                app_log!("EXECUTOR", "[step {}] ⏰ TIMEOUT: LLM call exceeded 90s", step.id);
+                return Err("LLM 响应超时(90s)，请检查网络或更换模型".into());
+            }
+        };
 
         // ── Compatibility fallback: if 400 error with tools, retry without tools ──
         if !resp.status().is_success() {

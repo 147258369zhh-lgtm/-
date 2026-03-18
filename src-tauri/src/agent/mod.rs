@@ -40,6 +40,7 @@ use std::collections::HashSet;
 
 static RUNNING_AGENTS: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
+static IS_AGENT_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Drop guard — 函数退出时自动清理运行锁
 struct RunGuard(String);
@@ -62,6 +63,19 @@ pub async fn agent_run(
     req: AgentRunRequest,
 ) -> Result<AgentRunResult, String> {
     crate::logger::init();
+
+    // ── 全局单运行锁: 同一时间只允许一个 Agent 运行 ──
+    if IS_AGENT_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("Agent 正在运行中，请等待当前任务完成".into());
+    }
+    // Drop guard for global lock
+    struct GlobalRunGuard;
+    impl Drop for GlobalRunGuard {
+        fn drop(&mut self) {
+            IS_AGENT_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    let _global_guard = GlobalRunGuard;
 
     // ── 1.1: 来源标识 + 去重锁 ──
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -839,6 +853,8 @@ pub struct WorkflowStepInfo {
     pub id: u32,
     pub goal: String,
     pub tool: String,
+    pub args: Option<serde_json::Value>,
+    pub expected_output: Option<String>,
 }
 
 impl From<AgentBlueprint> for BlueprintInfo {
@@ -848,6 +864,8 @@ impl From<AgentBlueprint> for BlueprintInfo {
                 id: s.id,
                 goal: s.goal.clone(),
                 tool: s.recommended_tool.clone(),
+                args: None,
+                expected_output: None,
             }
         }).collect();
         BlueprintInfo {

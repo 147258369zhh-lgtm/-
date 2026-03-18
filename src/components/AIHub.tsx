@@ -280,6 +280,37 @@ const NodePropsModal = ({ node, onClose, onUpdate }: { node: Node; onClose: () =
               borderRadius: 12, border: '1px solid var(--input-border)', fontSize: 13,
             }} placeholder="节点功能描述..." />
           </label>
+
+          {/* 工具节点额外信息 */}
+          {node.type === 'hub-tool' && (node.data as any).toolName && (
+            <div style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: '12px 14px', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>工具详情</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '6px 10px', fontSize: 12 }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>工具 ID</span>
+                <span style={{ fontFamily: 'monospace', color: 'var(--brand)', fontWeight: 600 }}>{(node.data as any).toolName}</span>
+                {(node.data as any).stepId != null && <>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>步骤 #</span>
+                  <span>{(node.data as any).stepId}</span>
+                </>}
+                {(node.data as any).expectedOutput && <>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>预期输出</span>
+                  <span>{(node.data as any).expectedOutput}</span>
+                </>}
+              </div>
+              {(node.data as any).args && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>参数</div>
+                  <pre style={{
+                    margin: 0, padding: '8px 10px', borderRadius: 8,
+                    background: 'var(--bg-primary)', fontSize: 11, lineHeight: 1.5,
+                    fontFamily: 'monospace', color: 'var(--text-primary)',
+                    overflow: 'auto', maxHeight: 150, whiteSpace: 'pre-wrap',
+                  }}>{typeof (node.data as any).args === 'string' ? (node.data as any).args : JSON.stringify((node.data as any).args, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          )}
+
           {(node.type === 'hub-llm' || node.type === 'hub-agent') && (
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
               Prompt / 指令
@@ -343,6 +374,8 @@ const HubEditor = ({ tab, item, allItems, onBack, onSave }: {
   const [genSteps, setGenSteps] = useState<{label: string; status: 'pending'|'running'|'done'|'error'}[]>([]);
   const [genCurrentStep, setGenCurrentStep] = useState(-1);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizedPrompt, setOptimizedPrompt] = useState<string | null>(null);
+  const [isPreOptimizing, setIsPreOptimizing] = useState(false);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [isTesting, setIsTesting] = useState(false);
   const [testNodeStatus, setTestNodeStatus] = useState<Record<string, 'pending'|'running'|'done'|'error'>>({});
@@ -1166,6 +1199,65 @@ ${prevErrorsCtx}
                 resize: 'none', lineHeight: 1.6,
               }}
             />
+
+            {/* AI 优化描述按钮 */}
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button
+                onClick={async () => {
+                  if (!genPrompt.trim() || isPreOptimizing) return;
+                  setIsPreOptimizing(true);
+                  try {
+                    const result: any = await invoke('ai_chat', {
+                      prompt: `你是 Agent 需求架构师。请优化以下用户的 Agent 描述，使其更精确、结构化、可执行。\n\n原始描述："${genPrompt}"\n\n要求：\n1. 明确输入输出\n2. 拆解为可执行步骤\n3. 指定关键参数（如文件路径、格式）\n4. 保持简洁，不超过3句话\n5. 只返回优化后的描述文字，不要其他说明`,
+                    });
+                    const text = typeof result === 'string' ? result : result?.content || result?.text || JSON.stringify(result);
+                    setOptimizedPrompt(text.replace(/^["']|["']$/g, '').trim());
+                  } catch (e) {
+                    console.error('AI optimize failed:', e);
+                  } finally {
+                    setIsPreOptimizing(false);
+                  }
+                }}
+                disabled={!genPrompt.trim() || isPreOptimizing}
+                style={{
+                  flex: 1, padding: '7px 0', borderRadius: 8,
+                  border: '1px solid #8b5cf640', background: 'rgba(139,92,246,0.08)',
+                  color: '#8b5cf6', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  opacity: !genPrompt.trim() ? 0.4 : 1,
+                }}
+              >
+                {isPreOptimizing ? (
+                  <><div style={{ width: 10, height: 10, border: '2px solid #8b5cf640', borderTopColor: '#8b5cf6', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} /> 优化中...</>
+                ) : (
+                  <><Sparkles size={12} /> AI 优化描述</>
+                )}
+              </button>
+            </div>
+
+            {/* 优化结果预览 */}
+            {optimizedPrompt && (
+              <div style={{
+                marginTop: 8, padding: '10px 12px', borderRadius: 10,
+                border: '1px solid #8b5cf640', background: 'rgba(139,92,246,0.04)',
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#8b5cf6', marginBottom: 6 }}>✨ AI 优化结果</div>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {optimizedPrompt}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button onClick={() => { setGenPrompt(optimizedPrompt); setOptimizedPrompt(null); }} style={{
+                    flex: 1, padding: '6px', borderRadius: 8, border: 'none',
+                    background: '#8b5cf6', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  }}>✅ 使用优化</button>
+                  <button onClick={() => setOptimizedPrompt(null)} style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer',
+                  }}>取消</button>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleGenerate}
               disabled={isGenerating || !genPrompt.trim()}
