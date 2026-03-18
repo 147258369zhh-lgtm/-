@@ -118,6 +118,21 @@ const NODE_TYPES_CONFIG: Record<string, { icon: any; color: string; bg: string; 
   'hub-end':     { icon: Compass,        color: '#ef4444', bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.3)',   label: '结束' },
 };
 
+// ── 工具名称中文映射 ──
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  'shell_run': '执行命令', 'file_write': '写入文件', 'file_read': '读取文件',
+  'file_create': '创建文件/文件夹', 'file_delete': '删除文件', 'file_move': '移动文件',
+  'file_list': '列出文件', 'file_search': '搜索文件', 'date_now': '获取时间',
+  'word_write': '写Word文档', 'word_read': '读Word', 'ppt_create': '创建PPT',
+  'ppt_read': '读PPT', 'pdf_read': '读PDF', 'excel_write': '写Excel',
+  'excel_read': '读Excel', 'excel_analyze': '分析Excel', 'csv_to_excel': 'CSV转Excel',
+  'web_scrape': '网页爬取', 'browser_navigate': '浏览器导航', 'browser_script': '浏览器脚本',
+  'translate_text': '翻译文本', 'chart_generate': '生成图表', 'image_process': '图片处理',
+  'json_process': 'JSON处理', 'data_merge': '数据合并', 'table_transform': '表格转换',
+  'report_generate': '生成报告', 'doc_convert': '文档转换', 'markdown_convert': 'MD转换',
+  'qrcode_generate': '生成二维码', 'compress_archive': '压缩/解压',
+};
+
 // ── 统一画布节点渲染组件 ──
 const HubNode = ({ data, selected, type }: any) => {
   const config = NODE_TYPES_CONFIG[type] || NODE_TYPES_CONFIG['hub-tool'];
@@ -421,21 +436,33 @@ const HubEditor = ({ tab, item, allItems, onBack, onSave }: {
         // Step 2: 选择工具
         steps = advanceStep(steps, 2);
         await new Promise(r => setTimeout(r, 300));
+        // 从 workflow_template 生成真实工具节点
+        const workflow = result.workflow_template || [];
+        const startY = 80;
+        const stepSpacing = 100;
         const bpNodes: Node[] = [
-          { id: 'llm_auto', position: { x: 400, y: 200 }, data: { label: '大模型', detail: result.persona, model: '自动选择' }, type: 'hub-llm' },
-          { id: 'out_auto', position: { x: 750, y: 200 }, data: { label: '输出' }, type: 'hub-output' },
+          { id: 'start_node', position: { x: 100, y: startY + (workflow.length * stepSpacing) / 2 - 20 }, data: { label: '开始' }, type: 'hub-start' },
         ];
-        const bpEdges: Edge[] = [
-          { id: 'e_auto_1', source: 'llm_auto', target: 'out_auto', animated: true, style: { stroke: 'var(--brand)', strokeWidth: 2 } },
-        ];
-        if (result.tool_count > 0) {
-          const tools = ['文件操作', 'Excel 处理', '文档处理', 'AI 能力', '网页爬取', '系统命令', 'MCP 调用', '项目管理', '模板操作', '自动化'];
-          tools.slice(0, Math.min(result.tool_count, tools.length)).forEach((tool, i) => {
-            const nodeId = `tool_auto_${i}`;
-            bpNodes.push({ id: nodeId, position: { x: 100, y: 80 + i * 120 }, data: { label: tool }, type: 'hub-tool' });
-            bpEdges.push({ id: `e_tool_${i}`, source: nodeId, target: 'llm_auto', animated: true, style: { stroke: '#f59e0b44', strokeWidth: 1.5 } });
+        const bpEdges: Edge[] = [];
+
+        workflow.forEach((step: any, i: number) => {
+          const nodeId = `step_${step.id || i}`;
+          const toolLabel = TOOL_DISPLAY_NAMES[step.tool] || step.tool || `步骤${i + 1}`;
+          bpNodes.push({
+            id: nodeId,
+            position: { x: 350 + i * 220, y: startY + (workflow.length * stepSpacing) / 2 - 20 },
+            data: { label: toolLabel, detail: step.goal, toolName: step.tool, stepId: step.id },
+            type: 'hub-tool',
           });
-        }
+          // 连接边: 开始→第一步 或 上一步→当前步
+          const sourceId = i === 0 ? 'start_node' : `step_${workflow[i - 1]?.id || (i - 1)}`;
+          bpEdges.push({ id: `e_step_${i}`, source: sourceId, target: nodeId, animated: true, style: { stroke: 'var(--brand)', strokeWidth: 2 } });
+        });
+
+        // 添加输出节点
+        const lastStepId = workflow.length > 0 ? `step_${workflow[workflow.length - 1]?.id || (workflow.length - 1)}` : 'start_node';
+        bpNodes.push({ id: 'end_node', position: { x: 350 + workflow.length * 220, y: startY + (workflow.length * stepSpacing) / 2 - 20 }, data: { label: '完成' }, type: 'hub-end' });
+        bpEdges.push({ id: 'e_end', source: lastStepId, target: 'end_node', animated: true, style: { stroke: 'var(--brand)', strokeWidth: 2 } });
 
         // Step 3: 生成节点
         steps = advanceStep(steps, 3);
@@ -966,16 +993,31 @@ ${prevErrorsCtx}
         setTestLogs(prev => [...prev, { nodeId: 'plan', label: '📋 任务规划', status: 'done', message: step?.content || message || '规划完成', time }]);
       } else if (event_type === 'tool_call') {
         const toolName = step?.tool_name || '未知工具';
-        setTestLogs(prev => [...prev, { nodeId: `tool_${Date.now()}`, label: `🔧 ${toolName}`, status: 'running', message: `调用工具: ${toolName}`, time }]);
-        // 高亮画布上的对应工具节点
+        const displayName = (TOOL_DISPLAY_NAMES as any)[toolName] || toolName;
+        setTestLogs(prev => [...prev, { nodeId: `tool_${Date.now()}`, label: `🔧 ${displayName}`, status: 'running', message: `调用工具: ${displayName} (${toolName})`, time }]);
+        // 精确匹配画布节点: 只高亮 toolName 对应的节点，之前运行的标记完成
         setNodes(nds => nds.map(n => {
-          if (n.type === 'hub-tool') return { ...n, data: { ...n.data, _testStatus: 'running' } };
+          if (n.data?.toolName === toolName) {
+            return { ...n, data: { ...n.data, _testStatus: 'running' } };
+          }
+          if (n.data?._testStatus === 'running') {
+            return { ...n, data: { ...n.data, _testStatus: 'done' } };
+          }
           return n;
         }));
       } else if (event_type === 'tool_result') {
         const toolName = step?.tool_name || '工具';
+        const displayName = (TOOL_DISPLAY_NAMES as any)[toolName] || toolName;
         const result = step?.tool_result ? String(step.tool_result).slice(0, 200) : '完成';
-        setTestLogs(prev => [...prev, { nodeId: `result_${Date.now()}`, label: `✅ ${toolName}`, status: 'done', message: result, time }]);
+        setTestLogs(prev => [...prev, { nodeId: `result_${Date.now()}`, label: `✅ ${displayName}`, status: 'done', message: result, time }]);
+        // 精确标记已完成的工具节点
+        setNodes(nds => nds.map(n =>
+          n.data?.toolName === toolName
+            ? { ...n, data: { ...n.data, _testStatus: 'done' } }
+            : n
+        ));
+      } else if (event_type === 'step_start') {
+        setTestLogs(prev => [...prev, { nodeId: `step_${Date.now()}`, label: '▶ 步骤开始', status: 'running', message: step?.content || message || '', time }]);
       } else if (event_type === 'reflection') {
         setTestLogs(prev => [...prev, { nodeId: 'reflect', label: '🔍 反思', status: 'error', message: step?.content || '分析失败原因...', time }]);
       } else if (event_type === 'replan') {

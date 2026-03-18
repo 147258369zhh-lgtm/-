@@ -831,10 +831,25 @@ pub struct BlueprintInfo {
     pub workflow_steps: usize,
     pub version: String,
     pub created_at: String,
+    pub workflow_template: Vec<WorkflowStepInfo>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WorkflowStepInfo {
+    pub id: u32,
+    pub goal: String,
+    pub tool: String,
 }
 
 impl From<AgentBlueprint> for BlueprintInfo {
     fn from(bp: AgentBlueprint) -> Self {
+        let workflow_template: Vec<WorkflowStepInfo> = bp.workflow_template.iter().map(|s| {
+            WorkflowStepInfo {
+                id: s.id,
+                goal: s.goal.clone(),
+                tool: s.recommended_tool.clone(),
+            }
+        }).collect();
         BlueprintInfo {
             id: bp.id.clone(),
             name: bp.name.clone(),
@@ -844,6 +859,7 @@ impl From<AgentBlueprint> for BlueprintInfo {
             workflow_steps: bp.workflow_template.len(),
             version: bp.version.clone(),
             created_at: bp.created_at.clone(),
+            workflow_template,
         }
     }
 }

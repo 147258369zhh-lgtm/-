@@ -91,6 +91,31 @@ pub fn auto_compact(messages: &mut Vec<Value>) {
     let middle: Vec<&Value> = messages.iter().skip(2).take(tail_start - 2).collect();
     let summary = summarize_messages(&middle);
 
+    // 修复: 清理 tail 中开头的孤立 tool 消息
+    // 如果 tail 以 "tool" role 开头，说明它引用了被压缩掉的 assistant tool_call
+    // 这会导致 API 返回 "messages illegal" 400 错误
+    let mut clean_tail: Vec<Value> = Vec::new();
+    let mut found_valid_start = false;
+    for msg in &tail {
+        let role = msg["role"].as_str().unwrap_or("");
+        if !found_valid_start {
+            // 跳过开头的孤立 tool 消息
+            if role == "tool" {
+                continue;
+            }
+            found_valid_start = true;
+        }
+        clean_tail.push(msg.clone());
+    }
+
+    // 如果清理后 tail 为空，至少保留一条 user 消息
+    if clean_tail.is_empty() {
+        clean_tail.push(serde_json::json!({
+            "role": "user",
+            "content": "请继续执行任务。"
+        }));
+    }
+
     // 重建消息数组
     messages.clear();
     messages.extend(head);
@@ -98,7 +123,7 @@ pub fn auto_compact(messages: &mut Vec<Value>) {
         "role": "system",
         "content": format!("## 历史执行摘要\n{}", summary)
     }));
-    messages.extend(tail);
+    messages.extend(clean_tail);
 
     app_log!("CONTEXT", "Layer 2 compacted to {} messages", messages.len());
 }

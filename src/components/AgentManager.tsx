@@ -2,7 +2,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Bot, Plus, Trash2, Play, Search, Brain, Zap,
   Clock, CheckCircle2, XCircle, BarChart3, ChevronDown,
-  ChevronUp, Sparkles, Target, Wrench, Shield, Square, Loader
+  ChevronUp, Sparkles, Target, Wrench, Shield, Square, Loader,
+  Minimize2, Maximize2, Bell
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -20,7 +21,15 @@ interface BlueprintInfo {
   workflow_steps: number;
   version: string;
   created_at: string;
+  workflow_template?: { id: number; goal: string; tool: string }[];
 }
+
+// 工具名称中文映射
+const TOOL_NAMES: Record<string, string> = {
+  'shell_run': '执行命令', 'file_write': '写入文件', 'file_read': '读取文件',
+  'file_create': '创建文件', 'date_now': '获取时间', 'word_write': '写Word',
+  'web_scrape': '网页爬取', 'excel_write': '写Excel', 'excel_read': '读Excel',
+};
 
 interface ExperienceInfo {
   id: string;
@@ -60,6 +69,7 @@ export default function AgentManager() {
 
   // Execution state
   const [runState, setRunState] = useState<RunState | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   const stepsEndRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +166,20 @@ export default function AgentManager() {
         currentStep: result.success ? '✅ 执行完成' : '❌ 执行失败',
       } : null);
 
+      // 完成通知
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`Agent ${result.success ? '完成' : '失败'}`, {
+            body: `${bp.name} ${result.success ? '执行成功' : '执行失败'}`,
+            icon: '🤖',
+          });
+        } else if ('Notification' in window && Notification.permission !== 'denied') {
+          Notification.requestPermission();
+        }
+      } catch (_) { /* ignore notification errors */ }
+
+      setMinimized(false); // 完成后自动展开
+
       // Reload experiences after run
       loadExperiences();
     } catch (e: any) {
@@ -165,6 +189,7 @@ export default function AgentManager() {
         finalAnswer: `执行失败: ${e?.toString() || '未知错误'}`,
         currentStep: '❌ 执行出错',
       } : null);
+      setMinimized(false);
     } finally {
       unlisten();
       unlistenRef.current = null;
@@ -244,8 +269,44 @@ export default function AgentManager() {
   // ═══════════════════════════════════════════════
   // Execution Progress Panel (overlays on top when running)
   // ═══════════════════════════════════════════════
-  if (runState) {
+  // 最小化状态: 显示浮动底部条
+  if (runState && minimized) {
+    const stepCount = runState.steps.filter(s => ['tool_call', 'tool_result'].includes(s.step_type)).length;
+    return (
+      <>
+        {/* 浮动底部状态条 */}
+        <div style={{
+          position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          padding: '10px 20px', borderRadius: 16,
+          background: 'var(--bg-secondary)', border: '1px solid var(--accent-primary)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: 12,
+          cursor: 'pointer', zIndex: 9999,
+          animation: 'floatBar 2s ease-in-out infinite',
+        }} onClick={() => setMinimized(false)}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            background: '#3b82f6', animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
+          <Bot size={16} style={{ color: 'var(--accent-primary)' }} />
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{runState.blueprintName}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{runState.currentStep}</span>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: 'var(--accent-primary)', color: 'white' }}>
+            {stepCount} 步
+          </span>
+          <Maximize2 size={14} style={{ color: 'var(--text-secondary)' }} />
+        </div>
+        <style>{`
+          @keyframes floatBar { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-3px); } }
+          @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        `}</style>
+      </>
+    );
+  }
+
+  if (runState && !minimized) {
     const isRunning = runState.status === 'running';
+    const totalExpectedSteps = 6; // 估计步数
+    const currentProgress = Math.min(95, (runState.steps.filter(s => s.step_type === 'tool_result').length / totalExpectedSteps) * 100);
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         {/* Header */}
@@ -264,13 +325,34 @@ export default function AgentManager() {
               {isRunning ? '执行中...' : runState.status === 'success' ? '成功' : '失败'}
             </span>
           </div>
-          {!isRunning && (
-            <button onClick={() => { setRunState(null); }} style={{
-              padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-color)',
-              background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px',
-            }}>← 返回列表</button>
-          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {isRunning && (
+              <button onClick={() => setMinimized(true)} title="最小化" style={{
+                padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12px',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}><Minimize2 size={14} /> 最小化</button>
+            )}
+            {!isRunning && (
+              <button onClick={() => { setRunState(null); }} style={{
+                padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '13px',
+              }}>← 返回列表</button>
+            )}
+          </div>
         </div>
+
+        {/* 进度条 */}
+        {isRunning && (
+          <div style={{ height: 3, background: 'var(--bg-tertiary)' }}>
+            <div style={{
+              width: `${currentProgress}%`, height: '100%',
+              background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+              transition: 'width 0.5s ease',
+              animation: 'progressGlow 2s ease infinite',
+            }} />
+          </div>
+        )}
 
         {/* Current status bar */}
         <div style={{
@@ -285,7 +367,7 @@ export default function AgentManager() {
           )}
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{runState.currentStep}</span>
           <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-secondary)' }}>
-            {runState.steps.length} 步
+            {runState.steps.filter(s => s.step_type === 'tool_result').length} 工具调用
           </span>
         </div>
 
@@ -301,7 +383,7 @@ export default function AgentManager() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                 <StepIcon type={step.step_type} />
                 <span style={{ fontWeight: 600, fontSize: '13px' }}>
-                  {step.step_type === 'tool_call' ? `工具: ${step.tool_name}` :
+                  {step.step_type === 'tool_call' ? `工具: ${TOOL_NAMES[step.tool_name || ''] || step.tool_name}` :
                    step.step_type === 'planning' ? '任务规划' :
                    step.step_type === 'reflection' ? '反思修正' : '最终结果'}
                 </span>
@@ -348,7 +430,10 @@ export default function AgentManager() {
           </div>
         )}
 
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg); } }
+          @keyframes progressGlow { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+        `}</style>
       </div>
     );
   }
