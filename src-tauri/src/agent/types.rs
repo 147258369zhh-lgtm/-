@@ -83,11 +83,21 @@ pub enum StepStatus {
 pub struct PlanStep {
     pub id: u32,
     pub task: String,
+    /// 具体要调用的工具名（如 "word_write", "date_now"）
+    #[serde(default)]
+    pub tool: String,
+    /// 工具参数 JSON（如 {"title":"...", "content":"..."}）
+    #[serde(default = "default_empty_object")]
+    pub args: Value,
     pub status: StepStatus,
     pub result: Option<String>,
-    /// 前置依赖步骤 ID（借鉴 learn-claude-code s07 任务图 blockedBy 模式）
+    /// 前置依赖步骤 ID
     #[serde(default)]
     pub depends_on: Vec<u32>,
+}
+
+fn default_empty_object() -> Value {
+    Value::Object(serde_json::Map::new())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

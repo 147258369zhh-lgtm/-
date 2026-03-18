@@ -253,30 +253,41 @@ fn parse_plan_response(content: &str) -> Result<AgentPlan, String> {
 
     // Try parsing as {"steps": [...]} format
     if let Ok(plan_json) = serde_json::from_str::<Value>(&clean) {
-        if let Some(steps) = plan_json["steps"].as_array() {
+        if let Some(steps) = plan_json.get("steps").and_then(|s| s.as_array()) {
             let plan_steps: Vec<PlanStep> = steps
                 .iter()
                 .enumerate()
                 .map(|(i, s)| {
-                    let mut task = s["task"]
-                        .as_str()
-                        .unwrap_or(s.as_str().unwrap_or(""))
+                    let task = s.get("task")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
                         .to_string();
 
-                    // If there's a tool_hint, prepend it to the task description
-                    // so extract_tool_hint can find it later
-                    if let Some(hint) = s["tool_hint"].as_str() {
-                        if !hint.is_empty() && !task.contains(hint) {
-                            task = format!("使用 {} {}", hint, task);
-                        }
-                    }
+                    // v3: Extract concrete tool name (new format: "tool", old format: "tool_hint")
+                    let tool = s.get("tool")
+                        .or_else(|| s.get("tool_hint"))
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    // v3: Extract concrete args (new format)
+                    let args = s.get("args")
+                        .cloned()
+                        .unwrap_or(json!({}));
+
+                    let depends_on = s.get("depends_on")
+                        .and_then(|d| d.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|n| n as u32)).collect())
+                        .unwrap_or_default();
 
                     PlanStep {
-                        id: s["id"].as_u64().unwrap_or((i + 1) as u64) as u32,
+                        id: s.get("id").and_then(|i| i.as_u64()).unwrap_or((i + 1) as u64) as u32,
                         task,
+                        tool,
+                        args,
                         status: StepStatus::Pending,
                         result: None,
-                        depends_on: vec![],
+                        depends_on,
                     }
                 })
                 .filter(|s| !s.task.is_empty())
@@ -285,80 +296,16 @@ fn parse_plan_response(content: &str) -> Result<AgentPlan, String> {
             if !plan_steps.is_empty() {
                 app_log!("PLANNER", "Parsed {} steps from JSON", plan_steps.len());
                 for s in &plan_steps {
-                    app_log!("PLANNER", "  step {}: {}", s.id, s.task);
+                    app_log!("PLANNER", "  step {}: tool={}, task={}", s.id, s.tool, s.task);
                 }
-                return Ok(AgentPlan { steps: plan_steps });
-            }
-        }
-
-        // Try {"subtasks": [...]} format (backward compat)
-        if let Some(subtasks) = plan_json["subtasks"].as_array() {
-            let plan_steps: Vec<PlanStep> = subtasks
-                .iter()
-                .enumerate()
-                .map(|(i, t)| PlanStep {
-                    id: (i + 1) as u32,
-                    task: t.as_str().unwrap_or("").to_string(),
-                    status: StepStatus::Pending,
-                    result: None,
-                    depends_on: vec![],
-                })
-                .filter(|s| !s.task.is_empty())
-                .collect();
-
-            if !plan_steps.is_empty() {
                 return Ok(AgentPlan { steps: plan_steps });
             }
         }
     }
 
-    // Fallback: try to parse numbered list (e.g. "1. do X\n2. do Y")
-    let lines: Vec<&str> = content.lines()
-        .filter(|l| {
-            let trimmed = l.trim();
-            trimmed.starts_with("1.") || trimmed.starts_with("2.") || trimmed.starts_with("3.")
-                || trimmed.starts_with("4.") || trimmed.starts_with("5.") || trimmed.starts_with("6.")
-                || trimmed.starts_with("- ")
-        })
-        .collect();
-
-    if !lines.is_empty() {
-        let plan_steps: Vec<PlanStep> = lines
-            .iter()
-            .enumerate()
-            .map(|(i, line)| {
-                let task = line.trim()
-                    .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '-' || c == ' ')
-                    .trim()
-                    .to_string();
-                PlanStep {
-                    id: (i + 1) as u32,
-                    task,
-                    status: StepStatus::Pending,
-                    result: None,
-                    depends_on: vec![],
-                }
-            })
-            .filter(|s| !s.task.is_empty() && s.task.len() > 3)
-            .collect();
-
-        if !plan_steps.is_empty() {
-            app_log!("PLANNER", "Parsed {} steps from numbered list", plan_steps.len());
-            return Ok(AgentPlan { steps: plan_steps });
-        }
-    }
-
-    // Last resort: create a single-step plan
-    app_log!("PLANNER", "Fallback: single-step plan");
-    Ok(AgentPlan {
-        steps: vec![PlanStep {
-            id: 1,
-            task: format!("直接完成: {}", content.lines().next().unwrap_or("执行用户目标")),
-            status: StepStatus::Pending,
-            result: None,
-            depends_on: vec![],
-        }],
-    })
+    // Last resort: single-step plan
+    app_log!("PLANNER", "Fallback: could not parse plan JSON, creating single-step plan");
+    Err(format!("无法解析规划结果。原始内容: {}", &content[..content.len().min(500)]))
 }
 
 /// Extract JSON content from text that may contain markdown code blocks

@@ -345,6 +345,8 @@ pub async fn agent_run(
                 steps: vec![PlanStep {
                     id: 1,
                     task: goal.clone(),
+                    tool: String::new(),
+                    args: json!({}),
                     status: StepStatus::Pending,
                     result: None,
                     depends_on: vec![],
@@ -459,310 +461,169 @@ pub async fn agent_run(
         messages,
     };
 
-    // ── Layer 3: Step-based Execution Loop (v3: with stop_judge) ──
-    let mut plan_steps = plan.steps;
-    let max_replan = 2u32;
-    let mut replan_count = 0u32;
-    let cost_budget = CostBudget::default();
+    // ── Layer 3: Deterministic Step Execution (v3) ──
+    let plan_steps = plan.steps;
     let execution_start = std::time::Instant::now();
     let mut tools_used: Vec<String> = Vec::new();
-    let mut consecutive_failures: u32 = 0;
+    let mut prev_result: Option<String> = None;
+    let mut success_count = 0u32;
+    let mut failure_count = 0u32;
 
-    let mut step_idx = 0;
-    while step_idx < plan_steps.len() {
-        // ── Stop Judge check before each step ──
-        let stop_decision = stop_judge::evaluate(
-            ctx.completed_steps.len(),
-            plan_steps.len(),
-            consecutive_failures,
-            ctx.failure_count,
-            &cost_budget,
-            execution_start.elapsed().as_secs(),
-        );
-        match stop_decision {
-            StopDecision::StopSuccess(reason) => {
-                app_log!("AGENT", "STOP_JUDGE: Success - {}", reason);
-                break;
-            }
-            StopDecision::StopFailure(reason) => {
-                app_log!("AGENT", "STOP_JUDGE: Failure - {}", reason);
-                let stop_step = AgentStep {
-                    round: step_idx as u32,
-                    step_type: "stop".into(),
-                    tool_name: None, tool_args: None, tool_result: None,
-                    content: Some(format!("⛔ 终止: {}", reason)),
-                    duration_ms: None,
-                };
-                let _ = app_handle.emit("agent-event", AgentEvent {
-                    event_type: "stop".into(),
-                    step: Some(stop_step.clone()),
-                    message: Some(reason),
-                });
-                steps_log.push(stop_step);
-                break;
-            }
-            StopDecision::Continue => {}
-            StopDecision::ForceReplan(reason) => {
-                app_log!("AGENT", "STOP_JUDGE: ForceReplan - {}", reason);
-                // 强制重规划：重置连续失败计数，触发 replan 而非终止
-                consecutive_failures = 0;
-                // 让执行循环继续，下一轮 replan 逻辑会接管
-            }
+    for (step_idx, step) in plan_steps.iter().enumerate() {
+        app_log!("AGENT", "--- Executing step {} / {}: tool={}, task={} ---",
+            step.id, plan_steps.len(), step.tool, step.task);
+
+        // Emit step_start
+        let start_step = AgentStep {
+            round: step.id,
+            step_type: "step_start".into(),
+            tool_name: Some(step.tool.clone()),
+            tool_args: Some(step.args.clone()),
+            tool_result: None,
+            content: Some(format!("▶ 步骤 {}: {}", step.id, step.task)),
+            duration_ms: None,
+        };
+        let _ = app_handle.emit("agent-event", AgentEvent {
+            event_type: "step_start".into(),
+            step: Some(start_step.clone()),
+            message: Some(format!("开始执行步骤 {}: {}", step.id, step.task)),
+        });
+        steps_log.push(start_step);
+
+        // Check if tool name is empty (plan parsing failed to extract tool)
+        if step.tool.is_empty() {
+            app_log!("AGENT", "⚠️ Step {} has no tool specified, skipping", step.id);
+            failure_count += 1;
+
+            let skip_step = AgentStep {
+                round: step.id,
+                step_type: "tool_result".into(),
+                tool_name: None,
+                tool_args: None,
+                tool_result: Some("ERROR: 步骤未指定工具".into()),
+                content: Some(format!("⚠️ 步骤 {} 未指定工具名，跳过", step.id)),
+                duration_ms: None,
+            };
+            let _ = app_handle.emit("agent-event", AgentEvent {
+                event_type: "tool_result".into(),
+                step: Some(skip_step.clone()),
+                message: Some(format!("步骤 {} 缺少工具名", step.id)),
+            });
+            steps_log.push(skip_step);
+            continue;
         }
 
-        let mut step = plan_steps[step_idx].clone();
-        app_log!("AGENT", "--- Executing step {} / {}: {} ---", step.id, plan_steps.len(), step.task);
-
-        // ── 3.2: depends_on 前置条件验证（借鉴 s07 blockedBy）──
-        if !step.depends_on.is_empty() {
-            let unmet: Vec<u32> = step.depends_on.iter()
-                .filter(|dep_id| {
-                    !ctx.completed_steps.iter().any(|s| s.id == **dep_id)
-                })
-                .cloned()
-                .collect();
-            if !unmet.is_empty() {
-                app_log!("AGENT", "⏸️ Step {} blocked by unmet depends_on: {:?}", step.id, unmet);
-                // 跳过该步骤，等后续轮次重试
-                continue;
-            }
-        }
-
-        let result = executor::execute_step(
-            &mut ctx,
-            &mut step,
-            &llm,
-            &client,
+        // Execute the step deterministically
+        let result = executor::execute_step_direct(
+            step,
+            prev_result.as_deref(),
             &*pool,
             &app_handle,
             &req.allowed_paths,
-            &mut steps_log,
-        )
-        .await;
+        ).await;
 
         match result {
             Ok(output) => {
-                step.status = StepStatus::Done;
-                step.result = Some(output);
-                ctx.completed_steps.push(step.clone());
-                consecutive_failures = 0;  // Reset on success
-
-                // Track tools used
-                if let Some(hint) = prompt_builder::extract_tool_hint(&step.task) {
-                    if !tools_used.contains(&hint) {
-                        tools_used.push(hint);
-                    }
+                success_count += 1;
+                if !tools_used.contains(&step.tool) {
+                    tools_used.push(step.tool.clone());
                 }
 
-                memory::save_step_result(&*pool, &task_id, &step).await;
-                memory::update_task_status(
-                    &*pool,
-                    &task_id,
-                    "running",
-                    ctx.completed_steps.len() as u32,
-                    None,
-                )
-                .await;
+                // Save step result
+                let mut completed_step = step.clone();
+                completed_step.status = StepStatus::Done;
+                completed_step.result = Some(output.clone());
+                memory::save_step_result(&*pool, &task_id, &completed_step).await;
 
-                // ── 4.2: Goal Monitoring — 检查目标是否已提前完成 ──
-                if done_spec.deliverable_type != "none" {
-                    if let Some(ref result_text) = step.result {
-                        let r = result_text.to_lowercase();
-                        // 检测文件已成功创建
-                        let file_created = r.contains("successfully") || r.contains("成功")
-                            || r.contains("已创建") || r.contains("已保存")
-                            || r.contains("已写入") || r.contains("wrote");
-                        if file_created && ctx.completed_steps.len() >= 2 {
-                            app_log!("AGENT", "🎯 Goal Monitor: deliverable likely created at step {}, checking early completion",
-                                step.id);
-                        }
-                    }
-                }
+                // Emit step_done
+                let done_step = AgentStep {
+                    round: step.id,
+                    step_type: "step_done".into(),
+                    tool_name: Some(step.tool.clone()),
+                    tool_args: Some(step.args.clone()),
+                    tool_result: Some(output.clone()),
+                    content: Some(format!("✅ 步骤 {} 完成", step.id)),
+                    duration_ms: None,
+                };
+                let _ = app_handle.emit("agent-event", AgentEvent {
+                    event_type: "step_done".into(),
+                    step: Some(done_step.clone()),
+                    message: Some(format!("步骤 {} 执行成功", step.id)),
+                });
+                steps_log.push(done_step);
 
-                step_idx += 1;
+                // Store output for next step
+                prev_result = Some(output);
             }
             Err(err) => {
-                step.status = StepStatus::Failed;
-
-                // ── Tool Fallback Chain (Phase 2) ──
-                // Before counting as failure, try fallback tools
-                let tool_hint = prompt_builder::extract_tool_hint(&step.task);
-                let mut fallback_succeeded = false;
-                if let Some(ref hint) = tool_hint {
-                    if let Some(fallbacks) = tool_fallback::get_fallback(hint) {
-                        for fb in &fallbacks {
-                            app_log!("AGENT", "Trying fallback: {} → {} ({})", hint, fb.tool_name, fb.reason);
-                            // Get original args from the last executor call
-                            let fb_args = if let Some(last_step) = steps_log.last() {
-                                if let Some(ref original_args) = last_step.tool_args {
-                                    tool_fallback::transform_args_for_fallback(hint.as_str(), original_args, fb)
-                                } else {
-                                    json!({})
-                                }
-                            } else {
-                                json!({})
-                            };
-
-                            match tool_runtime::execute_tool(
-                                &fb.tool_name, &fb_args, &*pool, &req.allowed_paths, &app_handle
-                            ).await {
-                                Ok(result) => {
-                                    app_log!("AGENT", "Fallback {} succeeded!", fb.tool_name);
-                                    step.status = StepStatus::Done;
-                                    step.result = Some(format!("[降级] {} → {}\n{}", hint, fb.tool_name, result));
-                                    ctx.completed_steps.push(step.clone());
-                                    consecutive_failures = 0;
-                                    fallback_succeeded = true;
-
-                                    let fb_step = AgentStep {
-                                        round: step.id,
-                                        step_type: "fallback".into(),
-                                        tool_name: Some(fb.tool_name.clone()),
-                                        tool_args: serde_json::to_value(&fb_args).ok(),
-                                        tool_result: step.result.clone(),
-                                        content: Some(format!("🔄 {} 失败，已降级到 {} 成功", hint, fb.tool_name)),
-                                        duration_ms: None,
-                                    };
-                                    let _ = app_handle.emit("agent-event", AgentEvent {
-                                        event_type: "fallback".into(),
-                                        step: Some(fb_step.clone()),
-                                        message: Some(fb.reason.clone()),
-                                    });
-                                    steps_log.push(fb_step);
-                                    break;
-                                }
-                                Err(e) => {
-                                    app_log!("AGENT", "Fallback {} also failed: {}", fb.tool_name, e);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if fallback_succeeded {
-                    step_idx += 1;
-                    continue;
-                }
-
-                // Original failure handling
-                ctx.failure_count += 1;
-                consecutive_failures += 1;
+                failure_count += 1;
+                app_log!("AGENT", "Step {} FAILED: {}", step.id, &err);
 
                 // Save failed step
-                memory::save_step_result(&*pool, &task_id, &step).await;
-                memory::update_working_memory(&*pool, &task_id, "last_error", &err).await;
+                let mut failed_step = step.clone();
+                failed_step.status = StepStatus::Failed;
+                failed_step.result = Some(format!("ERROR: {}", &err));
+                memory::save_step_result(&*pool, &task_id, &failed_step).await;
 
-                // Emit failure
+                // Emit reflection event
                 let fail_step = AgentStep {
                     round: step.id,
                     step_type: "reflection".into(),
-                    tool_name: None,
+                    tool_name: Some(step.tool.clone()),
                     tool_args: None,
-                    tool_result: None,
-                    content: Some(format!("步骤 {} 失败: {}", step.id, err)),
+                    tool_result: Some(format!("ERROR: {}", &err)),
+                    content: Some(format!("❌ 步骤 {} 失败: {}", step.id, &err)),
                     duration_ms: None,
                 };
-                let _ = app_handle.emit(
-                    "agent-event",
-                    AgentEvent {
-                        event_type: "reflection".into(),
-                        step: Some(fail_step.clone()),
-                        message: Some("正在分析失败原因...".into()),
-                    },
-                );
+                let _ = app_handle.emit("agent-event", AgentEvent {
+                    event_type: "reflection".into(),
+                    step: Some(fail_step.clone()),
+                    message: Some(format!("步骤 {} 失败: {}", step.id, &err)),
+                });
                 steps_log.push(fail_step);
 
-                // RePlan if too many failures
-                if ctx.failure_count > 1 && replan_count < max_replan {
-                    replan_count += 1;
-                    if let Ok(new_plan) =
-                        planner::replan(&llm, &client, &goal, &step, &ctx.completed_steps).await
-                    {
-                        plan_steps = new_plan.steps;
-                        step_idx = 0;
-
-                        let replan_step = AgentStep {
-                            round: 0,
-                            step_type: "planning".into(),
-                            tool_name: None,
-                            tool_args: None,
-                            tool_result: None,
-                            content: Some(format!("🔄 重新规划 ({} 步)", plan_steps.len())),
-                            duration_ms: None,
-                        };
-                        let _ = app_handle.emit(
-                            "agent-event",
-                            AgentEvent {
-                                event_type: "replan".into(),
-                                step: Some(replan_step.clone()),
-                                message: Some("已重新规划任务".into()),
-                            },
-                        );
-                        steps_log.push(replan_step);
-                        continue;
-                    }
-                }
-
-                // Skip failed step and continue
-                step_idx += 1;
+                // Don't break — continue to next step if possible
             }
+        }
+
+        // Global timeout check (5 minutes max)
+        if execution_start.elapsed().as_secs() > 300 {
+            app_log!("AGENT", "⏰ GLOBAL TIMEOUT: exceeded 5 minutes");
+            break;
         }
     }
-
-    // ── Finalize: LLM-generated intelligent summary ──
-    let final_answer = if ctx.completed_steps.is_empty() {
-        "Agent 未能完成任何步骤".to_string()
+    // ── Finalize: Simple summary (no extra LLM call) ──
+    let total_steps = plan_steps.len() as u32;
+    let final_answer = if success_count == 0 {
+        format!("Agent 未能完成任何步骤（共 {} 步，{} 步失败）", total_steps, failure_count)
     } else {
-        // Try to get LLM-generated summary
-        let summary_prompt = prompt_builder::build_summary_prompt(&goal, &ctx.completed_steps);
-        let summary_result: Option<String> = async {
-            let payload = json!({
-                "model": llm.model_name,
-                "messages": [
-                    {"role": "system", "content": "你是一个任务总结助手。用中文简洁地总结任务执行结果。"},
-                    {"role": "user", "content": summary_prompt}
-                ],
-                "temperature": 0.3
-            });
-            let mut req_builder = client.post(&llm.endpoint).json(&payload);
-            if !llm.api_key.is_empty() {
-                req_builder = req_builder.header("Authorization", format!("Bearer {}", llm.api_key));
-            }
-            match req_builder.send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    if let Ok(json_resp) = resp.json::<Value>().await {
-                        json_resp["choices"][0]["message"]["content"]
-                            .as_str()
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        }.await;
-
-        match summary_result {
-            Some(summary) => {
-                app_log!("AGENT", "LLM summary generated: {} chars", summary.len());
-                summary
-            }
-            None => {
-                app_log!("AGENT", "LLM summary failed, falling back to mechanical summary");
-                memory::summarize_results(&ctx.completed_steps)
-            }
-        }
+        let step_results: Vec<String> = steps_log.iter()
+            .filter(|s| s.step_type == "step_done" || s.step_type == "tool_result")
+            .filter_map(|s| {
+                let tool = s.tool_name.as_deref().unwrap_or("unknown");
+                let result_preview = s.tool_result.as_deref().unwrap_or("");
+                let preview = if result_preview.len() > 200 {
+                    format!("{}...", &result_preview[..200])
+                } else {
+                    result_preview.to_string()
+                };
+                Some(format!("- {}: {}", tool, preview))
+            })
+            .collect();
+        format!("✅ 任务完成（{}/{} 步成功）\n{}", success_count, total_steps, step_results.join("\n"))
     };
+
+    app_log!("AGENT", "Final: {}/{} steps succeeded", success_count, total_steps);
 
     // Emit done
     let done_step = AgentStep {
-        round: ctx.completed_steps.len() as u32,
+        round: total_steps,
         step_type: "final".into(),
         tool_name: None,
         tool_args: None,
         tool_result: None,
         content: Some(final_answer.clone()),
-        duration_ms: None,
+        duration_ms: Some(execution_start.elapsed().as_millis() as u64),
     };
     let _ = app_handle.emit(
         "agent-event",
@@ -778,8 +639,8 @@ pub async fn agent_run(
     memory::update_task_status(
         &*pool,
         &task_id,
-        "completed",
-        ctx.completed_steps.len() as u32,
+        if success_count > 0 { "completed" } else { "failed" },
+        success_count,
         Some(&final_answer),
     )
     .await;
@@ -796,9 +657,9 @@ pub async fn agent_run(
 
     // ── v3: Write experience to learning system ──
     let score = experience::score_execution(
-        &ctx.completed_steps,
+        &[],  // no completed_steps vec needed
         plan_steps.len(),
-        ctx.failure_count,
+        failure_count,
         &tools_used,
         &structured_task.required_tools,
     );
@@ -809,10 +670,10 @@ pub async fn agent_run(
         intent: structured_task.intent.clone(),
         plan_json,
         tools_used: tools_used.clone(),
-        success: !ctx.completed_steps.is_empty(),
+        success: success_count > 0,
         score: score.clone(),
-        failure_reason: if ctx.failure_count > 0 {
-            Some(format!("{}次失败", ctx.failure_count))
+        failure_reason: if failure_count > 0 {
+            Some(format!("{}次失败", failure_count))
         } else {
             None
         },
@@ -823,10 +684,10 @@ pub async fn agent_run(
         score.accuracy, score.efficiency, score.tool_usage);
 
     Ok(AgentRunResult {
-        success: !ctx.completed_steps.is_empty(),
+        success: success_count > 0,
         final_answer,
         steps: steps_log,
-        total_rounds: ctx.completed_steps.len() as u32,
+        total_rounds: success_count,
         error: None,
     })
 }

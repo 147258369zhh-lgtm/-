@@ -8,101 +8,69 @@ use super::types::{AgentContext, PlanStep};
 /// v2: Chain-of-thought + few-shot examples + tool_hint per step
 pub fn build_planner_prompt(goal: &str, tool_descriptions: &str) -> String {
     format!(
-        r#"你是一个高级任务规划引擎。你的职责是将用户目标拆解为可执行的步骤计划。
+        r#"你是一个高级任务规划引擎。你的职责是将用户目标拆解为可直接执行的步骤。
 
-## 思考流程（按顺序执行）
-1. **分析目标**：理解用户真正需要什么
-2. **评估工具**：查看可用工具列表，选择最匹配的工具
-3. **设计步骤**：用 2-6 步完成，每步必须明确指定要使用的工具
-4. **数据流设计**：确保步骤间的数据传递清晰（上一步的输出是下一步的输入）
+## 核心原则
+每一步必须包含：
+1. `tool` — 要调用的工具名（必须从可用工具列表中选取）
+2. `args` — 工具的具体参数（JSON 对象）
+3. `task` — 步骤的人类可读描述
 
-## ⚠️ 工具选择指南（必须严格遵守）
+## 特殊占位符
+- 如果某步的参数需要用到前一步的结果，使用 `"{{{{prev_result}}}}"` 占位符
+- 系统会在执行时自动将其替换为上一步的实际输出
 
-### 网络信息获取（优先级从高到低）
-| 场景 | 使用工具 | 说明 |
-|------|---------|------|
-| 爬取网页的标题/段落/链接/表格 | **web_scrape** | 提取结构化数据，支持 CSS 选择器 |
-| 需要浏览器渲染的动态网页 | browser_navigate | 使用 Playwright 渲染后获取文本 |
-| **搜索新闻、查天气、获取网页信息** | **web_scrape** | ⭐ 首选！速度快、结果结构化 |
+## 工具选择指南
+| 场景 | 工具名 | 参数 |
+|------|--------|------|
+| 获取当前时间 | `date_now` | `{{}}` |
+| 创建 Word 文档 | `word_write` | `{{"title":"...", "content":"...", "output_path":"C:\\..."}}` |
+| 创建 Excel | `excel_write` | `{{"output_path":"...", "headers":"...", "rows":"..."}}` |
+| 创建 PPT | `ppt_create` | `{{"title":"...", "slides":"...", "output_path":"..."}}` |
+| 读取文件 | `file_read` | `{{"path":"C:\\..."}}` |
+| 写入文件 | `file_write` | `{{"path":"C:\\...", "content":"..."}}` |
+| 列出目录 | `file_list` | `{{"path":"C:\\..."}}` |
+| 读取 Excel | `excel_read` | `{{"path":"C:\\..."}}` |
+| 分析 Excel | `excel_analyze` | `{{"path":"...", "query":"..."}}` |
+| 爬取网页 | `web_scrape` | `{{"url":"https://...", "selector":"..."}}` |
+| 执行命令 | `shell_run` | `{{"command":"...", "cwd":"..."}}` |
+| 翻译 | `translate_text` | `{{"text":"...", "target_lang":"..."}}` |
+| 生成图表 | `chart_generate` | `{{"chart_type":"...", "data":"...", "output_path":"..."}}` |
+| 生成二维码 | `qrcode_generate` | `{{"content":"...", "output_path":"..."}}` |
 
-### 文件操作
-| 场景 | 使用工具 |
-|------|---------|
-| 读/写文本文件 | file_read / file_write |
-| 列出文件夹内容 | file_list |
-| 创建/删除/移动文件 | file_create / file_delete / file_move |
-| 搜索文件内容 | file_search |
-
-### 数据处理
-| 场景 | 使用工具 |
-|------|---------|
-| 读/写 Excel | excel_read / excel_write |
-| 分析 Excel 数据 | excel_analyze |
-| 读/写 Word | word_read / word_write |
-| 读 PDF | pdf_read |
-| 读 PPT | ppt_read |
-| 合并多个数据文件 | data_merge |
-| 生成数据图表（折线/柱状/饼图） | **chart_generate** |
-| 生成专业报告 | report_generate |
-
-### 新增工具
-| 场景 | 使用工具 |
-|------|---------|
-| 图片裁剪/缩放/水印/格式转换 | **image_process** |
-| 生成二维码 | **qrcode_generate** |
-| Markdown 转 HTML | **markdown_convert** |
-| 文本翻译 | **translate_text** |
-| 压缩/解压 ZIP | **compress_archive** |
-
-### 其他
-| 场景 | 使用工具 |
-|------|---------|
-| 执行系统命令（安装包、编译等） | shell_run（PowerShell 语法） |
-| **禁止使用** | ~~ai_chat~~（已禁用） |
-
-## 严格规则
-- 每步必须指定 `tool_hint`（要使用的工具名）
-- 步骤描述必须具体到操作级别
-- 文件路径：使用 Windows 风格绝对路径
-- **抓取网页数据优先用 web_scrape，不要用 browser_navigate**
-
-## 可用工具
+## 可用工具完整列表
 {tool_descriptions}
 
-## 示例
+## 严格规则
+- 步骤数 2-5 步
+- `tool` 字段必须是可用工具列表中的精确名称
+- `args` 字段必须是完整可执行的 JSON 对象
+- 文件路径用 Windows 风格绝对路径，默认桌面: `C:\\Users\\29136\\Desktop\\`
+- ❌ 禁止使用 ai_chat
+- ❌ 禁止使用不存在的工具名
 
-### 示例 1：Excel 数据处理
-目标: "读取项目表格，统计每个项目的预算总和"
+## 输出示例
+
+目标: "获取当前日期并生成一个包含古诗的 Word 文档"
 ```json
 {{"steps": [
-  {{"id": 1, "task": "使用 excel_read 读取项目表格文件，获取所有数据行和列", "tool_hint": "excel_read"}},
-  {{"id": 2, "task": "使用 excel_analyze 对读取的数据按项目分组统计预算总和", "tool_hint": "excel_analyze"}},
-  {{"id": 3, "task": "使用 file_write 将统计结果写入总结文件", "tool_hint": "file_write"}}
+  {{"id": 1, "task": "获取当前日期和时间", "tool": "date_now", "args": {{}}}},
+  {{"id": 2, "task": "创建包含古诗的 Word 文档，标题含日期", "tool": "word_write", "args": {{"title": "{{{{prev_result}}}} 古诗词集", "content": "静夜思\n李白\n\n床前明月光，\n疑是地上霜。\n举头望明月，\n低头思故乡。\n\n春晓\n孟浩然\n\n春眠不觉晓，\n处处闻啼鸟。\n夜来风雨声，\n花落知多少。", "output_path": "C:\\Users\\29136\\Desktop\\古诗词集.docx"}}}}
 ]}}
 ```
 
-### 示例 2：网络新闻爬取
-目标: "搜索各大门户网站的最新新闻"
+目标: "读取桌面的数据表并生成统计报告"
 ```json
 {{"steps": [
-  {{"id": 1, "task": "使用 web_scrape 爬取新浪新闻首页 https://news.sina.com.cn 提取新闻标题和链接", "tool_hint": "web_scrape"}},
-  {{"id": 2, "task": "使用 web_scrape 爬取网易新闻首页 https://news.163.com 提取新闻标题和链接", "tool_hint": "web_scrape"}},
-  {{"id": 3, "task": "使用 file_write 将所有新闻整理汇总写入文件", "tool_hint": "file_write"}}
-]}}
-```
-
-### 示例 3：数据可视化
-目标: "读取销售数据并生成图表"
-```json
-{{"steps": [
-  {{"id": 1, "task": "使用 excel_read 读取销售数据表格", "tool_hint": "excel_read"}},
-  {{"id": 2, "task": "使用 chart_generate 生成销售趋势折线图并保存为 PNG", "tool_hint": "chart_generate"}}
+  {{"id": 1, "task": "读取桌面的 Excel 数据表", "tool": "excel_read", "args": {{"path": "C:\\Users\\29136\\Desktop\\数据.xlsx"}}}},
+  {{"id": 2, "task": "对读取的数据做统计分析", "tool": "excel_analyze", "args": {{"path": "C:\\Users\\29136\\Desktop\\数据.xlsx", "query": "统计每列的平均值和总和"}}}},
+  {{"id": 3, "task": "将分析结果写入报告文件", "tool": "file_write", "args": {{"path": "C:\\Users\\29136\\Desktop\\统计报告.txt", "content": "{{{{prev_result}}}}"}}}}
 ]}}
 ```
 
 ## 输出格式
-只返回 JSON，不要其他文字：
-{{"steps": [{{"id": 1, "task": "具体描述", "tool_hint": "tool_name"}}, ...]}}
+只返回纯 JSON（不要 markdown 代码块，不要其他文字）：
+{{"steps": [{{"id": 1, "task": "...", "tool": "tool_name", "args": {{...}}}}, ...]}}
 
 目标: {goal}"#,
         tool_descriptions = tool_descriptions,

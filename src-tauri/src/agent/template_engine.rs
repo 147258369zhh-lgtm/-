@@ -33,9 +33,8 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "新闻采集".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 web_scrape 爬取新闻网站首页".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
-                        PlanStep { id: 2, task: "使用 web_scrape 提取新闻标题和链接".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
-                        PlanStep { id: 3, task: "使用 file_write 将新闻汇总写入文件".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 1, task: "爬取新闻网站首页".into(), tool: "web_scrape".into(), args: serde_json::json!({"url": "https://news.sina.com.cn", "selector": "h2,h3,a"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "将新闻汇总写入文件".into(), tool: "file_write".into(), args: serde_json::json!({"path": "C:\\Users\\29136\\Desktop\\新闻汇总.txt", "content": "{{prev_result}}"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.9,
                     source: TemplateSource::Builtin,
@@ -45,8 +44,8 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "天气查询".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 web_scrape 爬取天气网站获取天气信息".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
-                        PlanStep { id: 2, task: "使用 file_write 将天气信息整理输出".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 1, task: "爬取天气网站获取天气信息".into(), tool: "web_scrape".into(), args: serde_json::json!({"url": "https://www.weather.com.cn", "selector": ".today"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "将天气信息整理输出".into(), tool: "file_write".into(), args: serde_json::json!({"path": "C:\\Users\\29136\\Desktop\\天气.txt", "content": "{{prev_result}}"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.95,
                     source: TemplateSource::Builtin,
@@ -59,9 +58,9 @@ pub fn match_builtin_template(intent: &TaskIntent, goal: &str) -> Option<Matched
                 return Some(MatchedTemplate {
                     template_name: "Excel数据分析".into(),
                     workflow: vec![
-                        PlanStep { id: 1, task: "使用 excel_read 读取Excel文件内容".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
-                        PlanStep { id: 2, task: "使用 excel_analyze 对数据进行统计分析".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
-                        PlanStep { id: 3, task: "使用 file_write 将分析结果写入文件".into(), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 1, task: "读取Excel文件内容".into(), tool: "excel_read".into(), args: serde_json::json!({"path": ""}), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 2, task: "对数据进行统计分析".into(), tool: "excel_analyze".into(), args: serde_json::json!({"path": "", "query": "统计分析"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
+                        PlanStep { id: 3, task: "将分析结果写入文件".into(), tool: "file_write".into(), args: serde_json::json!({"path": "C:\\Users\\29136\\Desktop\\分析结果.txt", "content": "{{prev_result}}"}), status: StepStatus::Pending, result: None, depends_on: vec![] },
                     ],
                     confidence: 0.85,
                     source: TemplateSource::Builtin,
