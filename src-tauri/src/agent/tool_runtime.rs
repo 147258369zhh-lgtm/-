@@ -1494,54 +1494,52 @@ print(f'Excel 文件已创建: {{path}}')
         // ── Office Document Tools (Python-based, all via run_python_script) ──
 
         "excel_write" => {
-            let headers_str = arguments["headers"]
-                .as_str()
-                .unwrap_or("");
-            let rows_str = arguments["rows"]
-                .as_str()
-                .unwrap_or("");
             let output_path = arguments["output_path"]
                 .as_str()
                 .ok_or("excel_write: missing output_path")?;
-            let sheet_name = arguments["sheet_name"].as_str().unwrap_or("Sheet1");
 
             if let Some(parent) = std::path::Path::new(output_path).parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
 
+            let args_json = serde_json::to_string(arguments).map_err(|e| e.to_string())?;
+            let args_json_escaped = args_json.replace('\\', "\\\\").replace('\'', "\\'");
+
             let script = format!(
-                r#"import openpyxl, os
-path = r'{path}'
+                r#"import json
+import os
+import openpyxl
+
+args = json.loads('''{args_json}''')
+path = args.get('output_path', '')
+sheet_name = args.get('sheet_name', 'Sheet1')
+headers_str = args.get('headers', '')
+rows_str = args.get('rows', '')
+
 os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
 wb = openpyxl.Workbook()
 ws = wb.active
-ws.title = '{sheet}'
-headers = '{headers}'
-if headers:
-    ws.append([h.strip() for h in headers.split(',')])
-rows_str = '''{rows}'''
+ws.title = sheet_name
+
+if headers_str:
+    ws.append([h.strip() for h in headers_str.split(',')])
+
 if rows_str:
     for row_line in rows_str.split('|||'):
         row_line = row_line.strip()
         if row_line:
             ws.append([c.strip() for c in row_line.split(',')])
+
 wb.save(path)
 print(f'Excel 文件已创建: {{path}}')
 "#,
-                path = output_path, sheet = sheet_name,
-                headers = headers_str, rows = rows_str
+                args_json = args_json_escaped
             );
             let result = run_python_script(&script).await?;
             Ok(format!("Excel 文件已创建: {}\n{}", output_path, result.trim()))
         }
 
         "word_write" => {
-            let title = arguments["title"]
-                .as_str()
-                .unwrap_or("文档");
-            let content = arguments["content"]
-                .as_str()
-                .unwrap_or("");
             let output_path = arguments["output_path"]
                 .as_str()
                 .ok_or("word_write: missing output_path")?;
@@ -1550,14 +1548,25 @@ print(f'Excel 文件已创建: {{path}}')
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
 
+            // Safe JSON injection to avoid Python syntax errors caused by quotes/backslashes
+            let args_json = serde_json::to_string(arguments).map_err(|e| e.to_string())?;
+            // Escape literal backslashes and quotes for rust format! macro
+            let args_json_escaped = args_json.replace('\\', "\\\\").replace('\'', "\\'");
+
             let script = format!(
-                r#"from docx import Document
+                r#"import json
 import os
-path = r'{path}'
+from docx import Document
+
+args = json.loads('''{args_json}''')
+path = args.get('output_path', '')
+title = args.get('title', '文档')
+content = args.get('content', '')
+
 os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
 doc = Document()
-doc.add_heading('''{title}''', level=0)
-content = '''{content}'''
+doc.add_heading(title, level=0)
+
 for para in content.split('\n'):
     para = para.strip()
     if para:
@@ -1565,19 +1574,13 @@ for para in content.split('\n'):
 doc.save(path)
 print(f'Word 文档已创建: {{path}}')
 "#,
-                path = output_path, title = title, content = content
+                args_json = args_json_escaped
             );
             let result = run_python_script(&script).await?;
             Ok(format!("Word 文档已创建: {}\n{}", output_path, result.trim()))
         }
 
         "ppt_create" => {
-            let title = arguments["title"]
-                .as_str()
-                .unwrap_or("演示文稿");
-            let slides_str = arguments["slides"]
-                .as_str()
-                .unwrap_or("");
             let output_path = arguments["output_path"]
                 .as_str()
                 .ok_or("ppt_create: missing output_path")?;
@@ -1585,20 +1588,28 @@ print(f'Word 文档已创建: {{path}}')
             if let Some(parent) = std::path::Path::new(output_path).parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
+            
+            let args_json = serde_json::to_string(arguments).map_err(|e| e.to_string())?;
+            let args_json_escaped = args_json.replace('\\', "\\\\").replace('\'', "\\'");
 
             let script = format!(
-                r#"from pptx import Presentation
-from pptx.util import Inches, Pt
+                r#"import json
 import os
-path = r'{path}'
+from pptx import Presentation
+
+args = json.loads('''{args_json}''')
+path = args.get('output_path', '')
+title = args.get('title', '演示文稿')
+slides_data = args.get('slides', '')
+
 os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
 prs = Presentation()
 title_layout = prs.slide_layouts[0]
 slide = prs.slides.add_slide(title_layout)
-slide.shapes.title.text = '''{title}'''
+slide.shapes.title.text = title
 if len(slide.placeholders) > 1:
     slide.placeholders[1].text = ''
-slides_data = '''{slides}'''
+
 if slides_data:
     for slide_str in slides_data.split('|||'):
         slide_str = slide_str.strip()
@@ -1612,10 +1623,11 @@ if slides_data:
         s.shapes.title.text = s_title
         if len(s.placeholders) > 1:
             s.placeholders[1].text = s_body
+
 prs.save(path)
 print(f'PPT 已创建: {{path}}')
 "#,
-                path = output_path, title = title, slides = slides_str
+                args_json = args_json_escaped
             );
             let result = run_python_script(&script).await?;
             Ok(format!("PPT 已创建: {}\n{}", output_path, result.trim()))

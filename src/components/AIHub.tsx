@@ -2483,7 +2483,15 @@ const AIHubInner = () => {
     setEditingItem(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    const itemToDelete = items.find(i => i.id === id);
+    if (itemToDelete?.type === 'agent' && itemToDelete.source === 'local') {
+      try {
+        await invoke('agent_delete_blueprint', { id });
+      } catch (e) {
+        console.error('Failed to delete agent blueprint', e);
+      }
+    }
     setItems(prev => prev.filter(i => i.id !== id));
   };
 
