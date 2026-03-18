@@ -159,9 +159,18 @@ pub async fn execute_step(
                     return Err(format!("LLM 响应错误（降级也失败）: {}", fb_body));
                 }
 
-                let fb_json: Value = fallback_resp.json().await
-                    .map_err(|e| format!("降级 JSON 解析失败: {}", e))?;
-                let fb_content = fb_json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
+                let fb_json: Value = match fallback_resp.json().await {
+                    Ok(j) => j,
+                    Err(e) => return Err(format!("降级 JSON 解析失败: {}", e)),
+                };
+                let fb_content = fb_json.get("choices")
+                    .and_then(|c| c.as_array())
+                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.get("message"))
+                    .and_then(|m| m.get("content"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("")
+                    .to_string();
 
                 // Use the text response as the step result
                 let done_step = AgentStep {
@@ -187,16 +196,24 @@ pub async fn execute_step(
             return Err(format!("LLM 响应错误: {}", body));
         }
 
-        let json_resp: Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("JSON 解析失败: {}", e))?;
+        let json_resp: Value = match resp.json().await {
+            Ok(j) => j,
+            Err(e) => return Err(format!("主流程 JSON 解析失败: {}", e)),
+        };
         let elapsed = start.elapsed().as_millis() as u64;
 
-        let message = &json_resp["choices"][0]["message"];
-        let finish_reason = json_resp["choices"][0]["finish_reason"].as_str().unwrap_or("unknown");
-        let has_tool_calls = message["tool_calls"].is_array();
-        let msg_content = message["content"].as_str().unwrap_or("");
+        let message = json_resp.get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .ok_or_else(|| {
+                let err_msg = json_resp.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()).unwrap_or("未知格式");
+                format!("模型返回非法格式: {}", err_msg)
+            })?;
+            
+        let finish_reason = json_resp.get("choices").and_then(|c| c.as_array()).and_then(|c| c.get(0)).and_then(|c| c.get("finish_reason")).and_then(|f| f.as_str()).unwrap_or("unknown");
+        let has_tool_calls = message.get("tool_calls").map(|tc| tc.is_array()).unwrap_or(false);
+        let msg_content = message.get("content").and_then(|c| c.as_str()).unwrap_or("");
         app_log!("EXECUTOR", "[step {}] LLM: finish={}, tools={}, content_len={}, {}ms", step.id, finish_reason, has_tool_calls, msg_content.len(), elapsed);
 
         if let Some(tool_calls) = message["tool_calls"].as_array() {

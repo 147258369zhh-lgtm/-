@@ -109,12 +109,22 @@ pub async fn generate_plan_with_experience(
         return Err(format!("规划响应错误: {}", body));
     }
 
-    let json_resp: Value = resp.json().await
-        .map_err(|e| format!("规划 JSON 解析失败: {}", e))?;
+    let json_resp: Value = match resp.json().await {
+        Ok(j) => j,
+        Err(e) => return Err(format!("规划 JSON 解析失败: {}", e)),
+    };
 
-    let content = json_resp["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
+    let content = json_resp
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .ok_or_else(|| {
+            let error_msg = json_resp.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()).unwrap_or("未知格式 / 无 choices");
+            format!("模型返回非法格式: {}", error_msg)
+        })?
         .to_string();
 
     // 1.2: 关键日志节点 — LLM 响应后
@@ -170,9 +180,17 @@ pub async fn generate_plan(
         .await
         .map_err(|e| format!("规划 JSON 解析失败: {}", e))?;
 
-    let content = json_resp["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
+    let content = json_resp
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .ok_or_else(|| {
+            let error_msg = json_resp.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()).unwrap_or("未知格式 / 无 choices");
+            format!("模型返回非法格式: {}", error_msg)
+        })?
         .to_string();
 
     app_log!("PLANNER", "LLM planner response ({} chars): {}", content.len(), &content[..content.len().min(2000)]);
