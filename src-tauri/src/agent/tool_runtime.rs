@@ -2131,8 +2131,219 @@ with urllib.request.urlopen(req, timeout=10) as r:
             }
         }
 
-        _ => Err(format!("Unknown tool: {}", tool_name)),
+        _ => {
+            // Bridge 2: 尝试作为 MCP 工具调用（动态代理）
+            if let Ok(result) = try_mcp_tool_call(
+                tool_name, arguments, app_handle
+            ).await {
+                return Ok(result);
+            }
+            Err(format!("Unknown tool: {}", tool_name))
+        }
     }
+}
+
+// ═══════════════════════════════════════════════
+// Bridge 1: Dynamic Tool Discovery — MCP + Registry
+// ═══════════════════════════════════════════════
+
+/// 获取所有可用工具：内置 + MCP Server 工具 + 注册表插件
+pub async fn get_all_available_tools(
+    app_handle: &AppHandle,
+    pool: &sqlx::SqlitePool,
+) -> Vec<ToolDef> {
+    let mut tools = get_builtin_tools();
+    let mut seen: std::collections::HashSet<String> = tools.iter()
+        .map(|t| t.function.name.clone())
+        .collect();
+
+    // 1. 从 MCP Server 获取工具
+    let mcp_tools = get_mcp_tools(app_handle).await;
+    for tool in mcp_tools {
+        if !seen.contains(&tool.function.name) {
+            seen.insert(tool.function.name.clone());
+            tools.push(tool);
+        }
+    }
+
+    // 2. 从插件注册表获取已启用的工具
+    let registry_tools = get_registry_tools(pool).await;
+    for tool in registry_tools {
+        if !seen.contains(&tool.function.name) {
+            seen.insert(tool.function.name.clone());
+            tools.push(tool);
+        }
+    }
+
+    tools
+}
+
+/// 从已连接的 MCP Server 获取工具定义
+async fn get_mcp_tools(app_handle: &AppHandle) -> Vec<ToolDef> {
+    let mut result = Vec::new();
+
+    let mgr: tauri::State<'_, McpClientManager> = app_handle.state::<McpClientManager>();
+    match mgr.list_tools().await {
+        Ok(tools_val) => {
+            if let Some(servers) = tools_val.as_array() {
+                for server_entry in servers {
+                    let server_name = server_entry.get("server")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+
+                    // MCP tools/list response: { result: { tools: [...] } }
+                    let tools_array = server_entry.get("info")
+                        .and_then(|v| v.get("result"))
+                        .and_then(|v| v.get("tools"))
+                        .and_then(|v| v.as_array())
+                        // 部分 MCP 实现直接返回 { tools: [...] }
+                        .or_else(|| server_entry.get("info")
+                            .and_then(|v| v.get("tools"))
+                            .and_then(|v| v.as_array()));
+
+                    if let Some(tools) = tools_array {
+                        for tool in tools {
+                            let name = match tool.get("name").and_then(|v| v.as_str()) {
+                                Some(n) => n,
+                                None => continue,
+                            };
+                            let description = tool.get("description")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("MCP tool");
+                            let parameters = tool.get("inputSchema")
+                                .cloned()
+                                .unwrap_or(json!({"type": "object", "properties": {}}));
+
+                            // 用 "mcp:{server}:{tool}" 命名，避免与内置工具冲突
+                            let qualified_name = format!("mcp:{}:{}", server_name, name);
+
+                            result.push(ToolDef {
+                                tool_type: "function".into(),
+                                function: ToolFunction {
+                                    name: qualified_name,
+                                    description: format!("[MCP:{}] {}", server_name, description),
+                                    parameters,
+                                },
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to list MCP tools: {}", e);
+        }
+    }
+
+    result
+}
+
+/// 从插件注册表获取已启用的工具定义
+async fn get_registry_tools(pool: &sqlx::SqlitePool) -> Vec<ToolDef> {
+    let mut result = Vec::new();
+
+    // 查询 status=enabled 且 component_type 为 mcp 或 skill 的组件
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+        "SELECT name, component_type, description_zh, COALESCE(npm_package, source_url, '') as source \
+         FROM components WHERE status = 'enabled' AND component_type IN ('mcp', 'skill')"
+    )
+    .fetch_all(pool)
+    .await;
+
+    if let Ok(rows) = rows {
+        for (name, comp_type, desc_zh, _source) in rows {
+            let description = desc_zh.unwrap_or_else(|| format!("{} 插件", comp_type));
+
+            // 为每个注册表组件创建一个通用的 invoke 工具定义
+            let tool_name = format!("plugin:{}", name.replace(' ', "_").to_lowercase());
+
+            result.push(ToolDef {
+                tool_type: "function".into(),
+                function: ToolFunction {
+                    name: tool_name,
+                    description: format!("[{}插件] {}", comp_type.to_uppercase(), description),
+                    parameters: json!({
+                        "type": "object",
+                        "properties": {
+                            "action": { "type": "string", "description": "要执行的操作" },
+                            "input": { "type": "string", "description": "输入参数" }
+                        },
+                        "required": ["action"]
+                    }),
+                },
+            });
+        }
+    }
+
+    result
+}
+
+// ═══════════════════════════════════════════════
+// Bridge 2: MCP Proxy Execution
+// ═══════════════════════════════════════════════
+
+/// 尝试将未知工具调用代理到 MCP Server
+/// 工具名格式: "mcp:{server_name}:{tool_name}" 或直接匹配 MCP 工具名
+async fn try_mcp_tool_call(
+    tool_name: &str,
+    arguments: &Value,
+    app_handle: &AppHandle,
+) -> Result<String, String> {
+    let mgr: tauri::State<'_, McpClientManager> = app_handle.state::<McpClientManager>();
+
+    // Case 1: 格式化名称 "mcp:server:tool"
+    if tool_name.starts_with("mcp:") {
+        let parts: Vec<&str> = tool_name.splitn(3, ':').collect();
+        if parts.len() == 3 {
+            let server_name = parts[1];
+            let mcp_tool = parts[2];
+
+            let result = mgr.call_tool(server_name, mcp_tool, arguments)
+                .await
+                .map_err(|e| format!("MCP {} 调用失败: {}", tool_name, e))?;
+
+            // 提取 MCP 返回值中的 content 文本
+            return Ok(extract_mcp_result(&result));
+        }
+    }
+
+    // Case 2: 遍历所有 MCP server 找到匹配的工具
+    let clients = mgr.clients.lock().await;
+    let server_names: Vec<String> = clients.keys().cloned().collect();
+    drop(clients);
+
+    for server_name in &server_names {
+        // 尝试调用，如果工具不存在 MCP server 会返回错误，继续尝试下一个
+        match mgr.call_tool(server_name, tool_name, arguments).await {
+            Ok(result) => {
+                // 检查是否是 MCP 错误响应
+                if result.get("error").is_some() {
+                    continue;
+                }
+                return Ok(extract_mcp_result(&result));
+            }
+            Err(_) => continue,
+        }
+    }
+
+    Err(format!("MCP proxy: tool '{}' not found on any connected server", tool_name))
+}
+
+/// 从 MCP 响应中提取人类可读的结果文本
+fn extract_mcp_result(result: &Value) -> String {
+    // MCP 标准响应: { result: { content: [{ type: "text", text: "..." }] } }
+    if let Some(content) = result.get("result")
+        .and_then(|r| r.get("content"))
+        .and_then(|c| c.as_array()) {
+        let texts: Vec<&str> = content.iter()
+            .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+            .collect();
+        if !texts.is_empty() {
+            return texts.join("\n");
+        }
+    }
+    // Fallback: 直接 pretty-print JSON
+    serde_json::to_string_pretty(result).unwrap_or_else(|_| format!("{:?}", result))
 }
 
 /// Extract readable text from HTML content (simple tag stripping)

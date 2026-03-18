@@ -188,7 +188,7 @@ pub async fn agent_run(
     let tool_health = env.get_tool_health();
 
     // Build tools list (filtered by enabled_tools, health check, always exclude ai_chat)
-    let all_tools = tool_runtime::get_builtin_tools();
+    let all_tools = tool_runtime::get_all_available_tools(&app_handle, &*pool).await;
     let mut tools: Vec<ToolDef> = if let Some(ref enabled) = req.enabled_tools {
         all_tools
             .iter()
