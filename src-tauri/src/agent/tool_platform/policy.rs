@@ -113,7 +113,7 @@ pub async fn evaluate(
     if let Some(path_arg) = extract_path_arg(args) {
         if !allowed_paths.is_empty() && !is_path_allowed(&path_arg, allowed_paths) {
             return PolicyDecision::Blocked(
-                format!("Path '{}' is outside allowed paths", &path_arg[..path_arg.len().min(80)])
+                format!("Path '{}' is outside allowed paths", crate::logger::safe_truncate(&path_arg, 80))
             );
         }
     }

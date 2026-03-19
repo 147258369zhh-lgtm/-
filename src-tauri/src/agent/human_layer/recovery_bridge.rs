@@ -36,14 +36,14 @@ pub async fn wait_for_human(
         map.insert(intervention_id.to_string(), tx);
     }
 
-    app_log!("RECOVERY_BRIDGE", "Parking on intervention {}", &intervention_id[..8.min(intervention_id.len())]);
+    app_log!("RECOVERY_BRIDGE", "Parking on intervention {}", crate::logger::safe_truncate(&intervention_id, 8));
 
     match tokio::time::timeout(
         std::time::Duration::from_secs(600), // 10-min human timeout
         rx,
     ).await {
         Ok(Ok(resp)) => {
-            app_log!("RECOVERY_BRIDGE", "Resumed: {}", &resp[..resp.len().min(50)]);
+            app_log!("RECOVERY_BRIDGE", "Resumed: {}", crate::logger::safe_truncate(&resp, 50));
             Ok(resp)
         }
         Ok(Err(_)) => Err("human gate channel closed".into()),
@@ -68,7 +68,7 @@ pub fn signal_resume(
     };
     if let Some(tx) = map.remove(intervention_id) {
         let _ = tx.send(response);
-        app_log!("RECOVERY_BRIDGE", "Signalled resume for {}", &intervention_id[..8.min(intervention_id.len())]);
+        app_log!("RECOVERY_BRIDGE", "Signalled resume for {}", crate::logger::safe_truncate(&intervention_id, 8));
         true
     } else {
         false

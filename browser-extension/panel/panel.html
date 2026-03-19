@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>网页自动化录制助手</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <!-- 标题栏 -->
+  <div class="panel-header">
+    <h1>网页自动化录制助手</h1>
+    <div class="header-actions">
+      <button class="btn-sm" id="btnExportFlow" title="导出 JSON">📤</button>
+      <button class="btn-sm" id="btnImportFlow" title="导入 JSON">📥</button>
+    </div>
+  </div>
+
+  <!-- 录制控制栏 -->
+  <div class="record-bar">
+    <button class="btn-record" id="btnRecord">
+      <span class="record-dot"></span>
+      <span id="recordLabel">开始录制</span>
+    </button>
+    <button class="btn-sm" id="btnPause" style="display:none;">⏸ 暂停</button>
+    <div class="record-status" id="recordStatus">
+      <span id="recordStepCount">0 步</span>
+      <span id="recordTimer">00:00</span>
+    </div>
+  </div>
+
+  <!-- 流程选择 -->
+  <div class="section-divider"><span>已保存流程</span></div>
+  <div class="flow-selector">
+    <select id="flowSelect"><option value="">-- 选择流程 --</option></select>
+    <button class="btn-sm btn-run" id="btnNewFlow" title="新建空流程">+ 新建</button>
+    <button class="btn-sm" id="btnRefresh">🔄</button>
+    <button class="btn-sm btn-danger" id="btnDeleteFlow" title="删除流程">🗑</button>
+  </div>
+
+  <!-- 流程信息 -->
+  <div class="flow-info" id="flowInfo" style="display:none;">
+    <input type="text" class="flow-name-input" id="flowNameInput" placeholder="流程名称">
+    <div class="flow-actions">
+      <span class="flow-meta" id="flowMeta"></span>
+      <button class="btn-sm btn-save" id="btnSaveFlow">💾 保存</button>
+      <button class="btn-sm btn-run" id="btnRunFlow">▶ 执行</button>
+    </div>
+  </div>
+
+  <!-- 步骤列表 -->
+  <div class="step-list" id="stepList">
+    <div class="empty-hint">点击上方按钮开始录制</div>
+  </div>
+
+  <!-- 步骤详情编辑 -->
+  <div class="step-detail" id="stepDetail" style="display:none;">
+    <div class="detail-header">
+      <span class="detail-title" id="detailTitle">步骤详情</span>
+      <button class="btn-close" id="btnCloseDetail">✕</button>
+    </div>
+    <div class="detail-body">
+      <label>名称</label>
+      <input class="detail-input" id="detailName">
+      <label>类型</label>
+      <select class="detail-input" id="detailType">
+        <optgroup label="鼠标操作">
+          <option value="click">点击</option>
+          <option value="dblclick">双击</option>
+          <option value="rightClick">右键</option>
+          <option value="hover">悬停</option>
+        </optgroup>
+        <optgroup label="键盘/输入">
+          <option value="input">输入文本</option>
+          <option value="typeText">逐字输入</option>
+          <option value="pasteText">粘贴文本</option>
+          <option value="clearInput">清空</option>
+          <option value="keypress">按键</option>
+          <option value="hotkey">组合键</option>
+        </optgroup>
+        <optgroup label="表单操作">
+          <option value="select">下拉选择</option>
+          <option value="check">勾选/取消</option>
+          <option value="focus">聚焦</option>
+          <option value="upload">上传</option>
+        </optgroup>
+        <optgroup label="页面导航">
+          <option value="navigate">打开网址</option>
+          <option value="newTab">新标签页</option>
+          <option value="refresh">刷新</option>
+          <option value="goBack">返回</option>
+          <option value="goForward">前进</option>
+          <option value="scrollBy">滚动距离</option>
+          <option value="scroll">滚动到位置</option>
+          <option value="scrollIntoView">滚动到元素</option>
+        </optgroup>
+        <optgroup label="等待/延时">
+          <option value="delay">延时等待</option>
+          <option value="waitForElement">等待元素</option>
+          <option value="waitDisappear">等待消失</option>
+          <option value="waitPageLoad">等待加载</option>
+        </optgroup>
+        <optgroup label="数据提取">
+          <option value="extract">提取文本</option>
+          <option value="getText">取文本</option>
+          <option value="getValue">取值</option>
+          <option value="extractAttribute">提取属性</option>
+          <option value="screenshot">截图</option>
+        </optgroup>
+        <optgroup label="流程控制">
+          <option value="loop">循环开始</option>
+          <option value="loopEnd">循环结束</option>
+          <option value="condition">条件判断</option>
+          <option value="comment">注释</option>
+          <option value="jsAlert">弹窗</option>
+        </optgroup>
+      </select>
+      <label>选择器</label>
+      <div id="selectorList" class="selector-list"></div>
+      <button class="btn-sm btn-pick" id="btnPickElement">🎯 从页面选取元素</button>
+      <div id="dynamicParams"></div>
+      <label>超时(ms)</label>
+      <input class="detail-input" type="number" id="detailTimeout" value="10000">
+      <label>重试次数</label>
+      <input class="detail-input" type="number" id="detailRetry" value="1" min="1">
+      <label>备注</label>
+      <input class="detail-input" id="detailRemark">
+      <div class="detail-actions">
+        <button class="btn-sm btn-save" id="btnSaveStep">✓ 保存修改</button>
+        <button class="btn-sm btn-copy" id="btnCopyStep">📋 复制</button>
+        <button class="btn-sm btn-danger" id="btnDeleteStep">🗑 删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 快捷操作栏 -->
+  <div class="insert-bar">
+    <button class="btn-sm" id="btnInsertStep">+ 步骤</button>
+    <button class="btn-sm btn-delay" id="btnAddDelay">⏱ +延时</button>
+    <button class="btn-sm btn-loop" id="btnAddLoop">🔁 +循环</button>
+  </div>
+
+  <input type="file" id="fileImport" accept=".json" style="display:none;">
+  <script src="panel.js"></script>
+</body>
+</html>

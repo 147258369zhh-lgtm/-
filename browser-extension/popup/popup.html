@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网页自动化录制</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- 头部 -->
+  <div class="header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <polygon points="10,8 16,12 10,16"/>
+      </svg>
+      <span>自动化录制助手</span>
+    </div>
+    <div class="status-badge" id="statusBadge">就绪</div>
+  </div>
+
+  <!-- 录制控制 -->
+  <div class="controls">
+    <button class="btn btn-record" id="btnRecord">
+      <span class="btn-icon record-icon"></span>
+      开始录制
+    </button>
+    <button class="btn btn-pause" id="btnPause" disabled>
+      <span class="btn-icon">⏸</span>
+      暂停
+    </button>
+    <button class="btn btn-stop" id="btnStop" disabled>
+      <span class="btn-icon">⏹</span>
+      停止
+    </button>
+  </div>
+
+  <!-- 当前步骤计数 -->
+  <div class="step-counter" id="stepCounter" style="display:none;">
+    <span class="counter-label">已录制步骤</span>
+    <span class="counter-value" id="stepCount">0</span>
+  </div>
+
+  <!-- 流程列表 -->
+  <div class="section">
+    <div class="section-header">
+      <span>已保存流程</span>
+      <button class="btn-small" id="btnImport" title="导入流程">📥 导入</button>
+    </div>
+    <div class="flow-list" id="flowList">
+      <div class="empty-state">暂无保存的流程</div>
+    </div>
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="footer">
+    <button class="btn-small" id="btnOpenPanel">📋 流程编辑器</button>
+  </div>
+
+  <!-- 隐藏的文件导入 -->
+  <input type="file" id="fileImport" accept=".json" style="display:none;">
+
+  <script src="popup.js"></script>
+</body>
+</html>

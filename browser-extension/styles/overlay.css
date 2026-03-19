@@ -1,0 +1,138 @@
+/* ★ 覆盖层绝不拦截点击，但允许子元素正常渲染 ★ */
+#__autoflow-overlay {
+  pointer-events: none !important;
+  overflow: visible !important;
+}
+.__af-highlight-box,
+#__autoflow-tooltip,
+.__af-toast {
+  pointer-events: none !important;
+}
+
+.__af-highlight-box {
+  position: fixed;
+  display: none;
+  border: 2px solid #6c7bff;
+  background: rgba(108,123,255,0.06);
+  border-radius: 3px;
+  z-index: 2147483641;
+  transition: all 0.08s ease-out;
+  box-shadow: 0 0 0 1px rgba(108,123,255,0.2);
+}
+
+/* ═══ 浮动录制控制条 ═══ */
+#__autoflow-control {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 2147483645;
+  pointer-events: auto !important;
+  display: none;
+}
+
+.__af-ctrl-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(12,12,18,0.96);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(108,123,255,0.2);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  font-family: -apple-system,'Segoe UI',sans-serif;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.__af-ctrl-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #ff4444;
+  animation: __af-blink 1s infinite;
+  flex-shrink: 0;
+}
+
+.__af-ctrl-label { color: #ff6b6b; font-weight: 600; }
+
+.__af-ctrl-count, .__af-ctrl-timer {
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #8b9aff;
+}
+
+.__af-ctrl-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: #ddd;
+  font-size: 14px;
+  cursor: pointer;
+  pointer-events: auto !important;
+  transition: all 0.15s;
+}
+.__af-ctrl-btn:hover { background: rgba(255,255,255,0.15); }
+.__af-ctrl-stop { color: #ff6b6b; }
+.__af-ctrl-stop:hover { background: rgba(255,60,60,0.2); }
+
+@keyframes __af-blink {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ═══ Toast ═══ */
+.__af-toast {
+  position: fixed;
+  bottom: 70px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(12,12,18,0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(108,123,255,0.15);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  z-index: 2147483645;
+  font-family: -apple-system,'Segoe UI',sans-serif;
+  font-size: 12px;
+  color: #e0e0e8;
+  animation: __af-fadeIn 0.2s ease-out;
+}
+
+.__af-toast-count {
+  padding: 1px 6px;
+  background: rgba(108,123,255,0.15);
+  border-radius: 6px;
+  font-size: 10px;
+  color: #8b9aff;
+  font-weight: 600;
+}
+
+@keyframes __af-fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══ Tooltip ═══ */
+.__af-tooltip {
+  position: fixed;
+  display: none;
+  padding: 3px 8px;
+  background: rgba(20,20,30,0.95);
+  border: 1px solid rgba(108,123,255,0.2);
+  border-radius: 4px;
+  font-family: 'Consolas',monospace;
+  font-size: 11px;
+  color: #a8b4ff;
+  white-space: nowrap;
+  z-index: 2147483642;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

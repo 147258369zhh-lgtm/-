@@ -80,7 +80,7 @@ pub async fn save_experience(
     .bind(&tool_seq_str)
     .bind(success)
     .bind(session.round as i64)
-    .bind(&final_answer[..final_answer.len().min(1000)])
+    .bind(crate::logger::safe_truncate(&final_answer, 1000))
     .bind(&tags_str)
     .execute(pool).await;
 

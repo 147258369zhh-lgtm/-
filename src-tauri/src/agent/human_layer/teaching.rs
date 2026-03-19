@@ -58,7 +58,7 @@ pub async fn complete_teaching_session(
     .bind(session_id)
     .execute(pool).await;
 
-    app_log!("TEACHING", "Session {} completed, trace={}", &session_id[..8.min(session_id.len())], &trace.trace_id[..8.min(trace.trace_id.len())]);
+    app_log!("TEACHING", "Session {} completed, trace={}", crate::logger::safe_truncate(&session_id, 8), crate::logger::safe_truncate(&trace.trace_id, 8));
 
     // Phase 2 hook: pattern extraction
     // TODO: analyze trace → produce ReusablePattern

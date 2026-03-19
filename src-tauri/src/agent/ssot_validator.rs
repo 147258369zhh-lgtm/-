@@ -364,7 +364,7 @@ pub async fn build_run_replay(
     }
 
     let success = events.iter().any(|e| matches!(e.event_type, ReplayEventType::StopDecision));
-    app_log!("SSOT", "RunReplay built for run={} ({} events)", &run_id[..8.min(run_id.len())], events.len());
+    app_log!("SSOT", "RunReplay built for run={} ({} events)", crate::logger::safe_truncate(&run_id, 8), events.len());
 
     RunReplay {
         run_id: run_id.to_string(),
@@ -433,7 +433,7 @@ pub fn compute_execution_diff(
     };
 
     app_log!("SSOT", "ExecutionDiff run={}: {} missing, {} extra, severity={:?}",
-             &run_id[..8.min(run_id.len())], missing_steps.len(), extra_steps.len(), severity);
+             crate::logger::safe_truncate(&run_id, 8), missing_steps.len(), extra_steps.len(), severity);
 
     ExecutionDiff {
         blueprint_version_id: format!("{}@{}", blueprint.id, blueprint.version),

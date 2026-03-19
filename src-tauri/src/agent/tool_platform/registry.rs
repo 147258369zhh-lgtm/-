@@ -277,7 +277,7 @@ pub async fn ingest_tool_candidate(
     .bind(&now)
     .execute(pool).await;
 
-    app_log!("TOOL_REGISTRY", "Tool candidate ingested: '{}' from {} ({})", suggested_name, source, &source_id[..8.min(source_id.len())]);
+    app_log!("TOOL_REGISTRY", "Tool candidate ingested: '{}' from {} ({})", suggested_name, source, crate::logger::safe_truncate(&source_id, 8));
 }
 
 pub async fn list_tool_candidates(pool: &SqlitePool) -> Vec<serde_json::Value> {

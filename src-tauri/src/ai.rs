@@ -1,4 +1,5 @@
 use crate::db::DbPool;
+use crate::{app_log, app_error};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::State;
@@ -89,14 +90,23 @@ fn extract_text_from_response(
 
 #[tauri::command]
 pub async fn list_ai_configs(pool: State<'_, DbPool>) -> Result<Vec<AiConfig>, String> {
-    sqlx::query_as::<_, AiConfig>("SELECT id, name, provider, api_key, base_url, model_name, is_active, purpose FROM ai_configs ORDER BY created_at DESC")
+    app_log!("AI", "list_ai_configs called");
+    let result = sqlx::query_as::<_, AiConfig>("SELECT id, name, provider, api_key, base_url, model_name, is_active, purpose FROM ai_configs ORDER BY created_at DESC")
         .fetch_all(&*pool)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            app_error!("AI", "list_ai_configs FAILED: {}", e);
+            e.to_string()
+        });
+    if let Ok(ref configs) = result {
+        app_log!("AI", "list_ai_configs OK: {} configs", configs.len());
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn upsert_ai_config(pool: State<'_, DbPool>, config: AiConfig) -> Result<(), String> {
+    app_log!("AI", "upsert_ai_config: name='{}' provider='{}' model='{}' active={}", config.name, config.provider, config.model_name, config.is_active);
     let id = if config.id.is_empty() {
         uuid::Uuid::new_v4().to_string()
     } else {
@@ -144,11 +154,16 @@ pub async fn upsert_ai_config(pool: State<'_, DbPool>, config: AiConfig) -> Resu
 
 #[tauri::command]
 pub async fn delete_ai_config(pool: State<'_, DbPool>, id: String) -> Result<(), String> {
+    app_log!("AI", "delete_ai_config: id={}", id);
     sqlx::query("DELETE FROM ai_configs WHERE id = ?")
         .bind(id)
         .execute(&*pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            app_error!("AI", "delete_ai_config FAILED: {}", e);
+            e.to_string()
+        })?;
+    app_log!("AI", "delete_ai_config OK");
     Ok(())
 }
 
@@ -194,8 +209,12 @@ pub async fn resolve_ai_config(
 
 #[tauri::command]
 pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<String, String> {
+    crate::logger::log_separator("AI CHAT REQUEST");
+    app_log!("AI", "chat_with_ai: module={:?} prompt_len={} images={} model_override={:?}",
+             req.module, req.prompt.len(), req.images.as_ref().map_or(0, |v| v.len()), req.model_override);
     // 模块级引擎路由：优先查找模块指定的引擎，否则回退到第一个激活引擎
     let active_config = resolve_ai_config(&*pool, req.module.as_deref()).await?;
+    app_log!("AI", "  Resolved config: name='{}' provider='{}' base_url={:?}", active_config.name, active_config.provider, active_config.base_url);
 
     // 确定使用的模型：优先使用前端传来的覆盖参数，否则使用配置中的模型名
     let mut model_name = req
@@ -415,6 +434,7 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         (target, payload)
     };
 
+    app_log!("AI", "  Sending request: model='{}' endpoint='{}'", model_name, endpoint.split('?').next().unwrap_or(""));
     let mut request = client.post(&endpoint).json(&body);
 
     // 如果不是 Gemini 或者用户明确配置了 Headers 鉴权（比如中转站）
@@ -423,13 +443,15 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
     }
 
     let resp = request.send().await.map_err(|e| {
-        // 展开更详细的底层错误，便于排查本地服务连接问题
-        format!(
+        let err_msg = format!(
             "网络请求失败 (端点: {}): {:#?}",
             endpoint.split('?').next().unwrap_or(""),
             e
-        )
+        );
+        app_error!("AI", "  HTTP FAILED: {}", err_msg);
+        err_msg
     })?;
+    app_log!("AI", "  HTTP response: status={}", resp.status());
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -465,11 +487,13 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
     let json_resp: serde_json::Value = serde_json::from_str(&raw_body)
         .map_err(|e| format!("JSON 解析失败: {} — 原始响应(前500字): {}", e, &raw_body[..raw_body.len().min(500)]))?;
     let text = extract_text_from_response(&json_resp, is_gemini)?;
+    app_log!("AI", "  Response extracted: {} chars", text.len());
 
     // Token usage tracking — 解析 API 返回的 usage 字段并记录
     let pt = json_resp["usage"]["prompt_tokens"].as_i64().unwrap_or(0);
     let ct = json_resp["usage"]["completion_tokens"].as_i64().unwrap_or(0);
     if pt > 0 || ct > 0 {
+        app_log!("AI", "  Token usage: prompt={} completion={} total={}", pt, ct, pt+ct);
         let module_label = req.module.as_deref().unwrap_or("ai_chat");
         let provider_name = active_config.provider.as_str();
         crate::token_usage::record_token_usage(
@@ -477,6 +501,7 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
         ).await;
     }
 
+    app_log!("AI", "chat_with_ai DONE");
     Ok(text)
 }
 
@@ -484,6 +509,8 @@ pub async fn chat_with_ai(pool: State<'_, DbPool>, req: ChatRequest) -> Result<S
 pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<String, String> {
     let cfg = payload.config;
     let req = payload.req;
+    crate::logger::log_separator("AI CHAT (CONFIG OVERRIDE)");
+    app_log!("AI", "chat_with_ai_config: provider='{}' model='{}' prompt_len={}", cfg.provider, cfg.model_name, req.prompt.len());
 
     let mut url = cfg
         .base_url
@@ -660,18 +687,22 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
         (target, payload)
     };
 
+    app_log!("AI", "  Sending config-override request: model='{}' endpoint='{}'", model_name, endpoint.split('?').next().unwrap_or(""));
     let mut request = client.post(&endpoint).json(&body);
     if !is_gemini && !api_key.is_empty() {
         request = request.header("Authorization", format!("Bearer {}", api_key));
     }
 
     let resp = request.send().await.map_err(|e| {
-        format!(
+        let err_msg = format!(
             "网络请求失败 (端点: {}): {:#?}",
             endpoint.split('?').next().unwrap_or(""),
             e
-        )
+        );
+        app_error!("AI", "  HTTP FAILED: {}", err_msg);
+        err_msg
     })?;
+    app_log!("AI", "  HTTP response: status={}", resp.status());
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -701,12 +732,21 @@ pub async fn chat_with_ai_config(payload: ChatWithConfigRequest) -> Result<Strin
 
     let raw_body = resp.text().await.map_err(|e| format!("读取响应体失败: {}", e))?;
     let json_resp: serde_json::Value = serde_json::from_str(&raw_body)
-        .map_err(|e| format!("JSON 解析失败: {} — 原始响应(前500字): {}", e, &raw_body[..raw_body.len().min(500)]))?;
-    extract_text_from_response(&json_resp, is_gemini)
+        .map_err(|e| {
+            let err_msg = format!("JSON 解析失败: {} — 原始响应(前500字): {}", e, &raw_body[..raw_body.len().min(500)]);
+            app_error!("AI", "  {}", err_msg);
+            err_msg
+        })?;
+    let result = extract_text_from_response(&json_resp, is_gemini);
+    if let Ok(ref text) = result {
+        app_log!("AI", "chat_with_ai_config DONE: {} chars", text.len());
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn fetch_public_free_apis() -> Result<Vec<AiConfig>, String> {
+    app_log!("AI", "fetch_public_free_apis: scanning endpoints...");
     // 真实扫网：逐一探测已知的免费/社区 API 端点，只返回真正可连通的节点
     let candidates = vec![
         (

@@ -84,7 +84,7 @@ pub async fn complete_correction(
     .bind(&notes).bind(trace_id).bind(record_id)
     .execute(pool).await;
 
-    app_log!("CORRECTION", "Completed {} success={} new_rule={}", &record_id[..8.min(record_id.len())], recovery_success, formed_new_rule);
+    app_log!("CORRECTION", "Completed {} success={} new_rule={}", crate::logger::safe_truncate(&record_id, 8), recovery_success, formed_new_rule);
 
     // Tool Platform feedback: record which tool required human intervention.
     // This is how CorrectionReasonCode::ToolParameterError or AgentPlanError

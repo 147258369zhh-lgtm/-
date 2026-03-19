@@ -909,3 +909,130 @@ pub enum DiffSeverity {
     Moderate,   // node reorder, unexpected tool
     Critical,   // missing required stage, gate bypassed
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Office Document Workflow Agent — Core Types
+// Phase 1 restructure: template matching, constraint extraction,
+// done-spec driven blueprint generation.
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Workflow Type Classification ─────────────────────────────────
+
+/// 8 core workflow types for office document operations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowType {
+    /// Word → 提取信息
+    WordExtract,
+    /// Word → 批量修改
+    WordModify,
+    /// Word A → Word B 流转
+    WordToWord,
+    /// Excel → 提取信息
+    ExcelExtract,
+    /// Excel → 批量修改
+    ExcelModify,
+    /// Excel A → Excel B 流转
+    ExcelToExcel,
+    /// Word → Excel 填充
+    WordToExcel,
+    /// Excel → Word 填充
+    ExcelToWord,
+    /// 本地文件 → 浏览器填报
+    LocalToBrowser,
+    /// 导出与格式转换
+    Export,
+    /// 简单文件创建
+    FileCreate,
+}
+
+// ─── User Constraints ─────────────────────────────────────────────
+
+/// Structured extraction of user requirements.
+/// Rule-based extraction first, LLM fallback second.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UserConstraints {
+    /// Output format: "docx" | "xlsx" | "txt" | "pdf" | "pptx"
+    pub output_format: Option<String>,
+    /// Output location: "desktop" | "documents" | absolute path
+    pub output_location: Option<String>,
+    /// Filename rule: "timestamp" | "custom:xxx"
+    pub filename_rule: Option<String>,
+    /// Content requirement (e.g., "写一首唐诗")
+    pub content_requirement: Option<String>,
+    /// Source files for input
+    pub source_files: Vec<String>,
+    /// Target files for output
+    pub target_files: Vec<String>,
+    /// Auto-detected workflow type
+    pub workflow_type: Option<WorkflowType>,
+    /// Field mappings for cross-document operations
+    pub field_mappings: Vec<(String, String)>,
+}
+
+// ─── Done Spec ────────────────────────────────────────────────────
+
+/// Deliverable specification — what "done" looks like.
+/// Consumed by: Planner, Executor, GoalMonitor, ResultChecker.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DoneSpec {
+    /// Expected deliverable type: "docx" | "xlsx" | "txt" | "browser_submit"
+    pub deliverable_type: String,
+    /// Expected save path (resolved from UserConstraints)
+    pub save_path: Option<String>,
+    /// Filename pattern (e.g., "2026-03-18_报告.docx")
+    pub filename_pattern: Option<String>,
+    /// Content that MUST appear in the deliverable
+    pub required_content: Vec<String>,
+    /// Machine-checkable success conditions
+    pub success_checks: Vec<String>,
+}
+
+// ─── Template Execution Mode ──────────────────────────────────────
+
+/// Three-level execution strategy for templates.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum TemplateExecutionMode {
+    /// No LLM calls — fully deterministic tool chain
+    Deterministic,
+    /// Template skeleton + 1 LLM call to fill content
+    SkeletonWithLlm,
+    /// Full 3-phase LLM planning (original fallback)
+    PlannerFallback,
+}
+
+// ─── Agent Template ───────────────────────────────────────────────
+
+/// A pre-defined template for high-frequency office tasks.
+/// Templates bypass LLM planning when matched.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTemplate {
+    pub template_id: String,
+    /// Human-readable intent description
+    pub intent: String,
+    /// Execution strategy
+    pub execution_mode: TemplateExecutionMode,
+    /// Keywords that trigger this template
+    pub trigger_patterns: Vec<String>,
+    /// Pre-defined workflow steps
+    pub default_steps: Vec<TemplateStep>,
+}
+
+/// A single step in a template workflow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateStep {
+    pub tool_name: String,
+    pub goal: String,
+    pub default_args: Value,
+}
+
+/// Result of template matching.
+#[derive(Debug, Clone)]
+pub struct TemplateMatch {
+    pub template: AgentTemplate,
+    pub constraints: UserConstraints,
+    pub done_spec: DoneSpec,
+    /// Confidence score 0.0–1.0
+    pub confidence: f64,
+}

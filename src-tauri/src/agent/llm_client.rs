@@ -113,7 +113,7 @@ impl LlmClient {
                         content: Some(text.clone()),
                         duration_ms: None,
                     }),
-                    message: Some(text[..text.len().min(200)].to_string()),
+                    message: Some(crate::logger::safe_truncate(&text, 200).to_string()),
                 });
             }
         }
@@ -146,7 +146,7 @@ impl LlmClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("LLM HTTP {status}: {}", &body[..body.len().min(400)]));
+            return Err(format!("LLM HTTP {status}: {}", crate::logger::safe_truncate(&body, 400)));
         }
 
         resp.json::<Value>().await

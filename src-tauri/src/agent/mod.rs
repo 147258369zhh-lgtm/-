@@ -26,6 +26,8 @@ pub mod workflow_runtime;
 pub mod tool_runtime;
 pub mod tool_platform;
 pub mod ssot_validator;
+pub mod template_matcher;
+pub mod constraint_extractor;
 
 use types::*;
 use tauri::AppHandle;
@@ -43,7 +45,7 @@ pub async fn agent_run(
     req: AgentRunRequest,
 ) -> Result<AgentRunResult, String> {
     let goal = req.goal.clone().unwrap_or_else(|| req.prompt.clone());
-    app_log!("AGENT", "=== agent_run: {} ===", &goal[..goal.len().min(80)]);
+    app_log!("AGENT", "=== agent_run: {} ===", crate::logger::safe_truncate(&goal, 80));
 
     let pool_ref: &sqlx::SqlitePool = &*pool;
     memory::ensure_schema(pool_ref).await;
@@ -90,7 +92,7 @@ pub async fn agent_run_workflow(
     model_config_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     app_log!("AGENT", "=== agent_run_workflow: blueprint={} ===",
-             &blueprint_id[..8.min(blueprint_id.len())]);
+             crate::logger::safe_truncate(&blueprint_id, 8));
 
     let pool_ref: &sqlx::SqlitePool = &*pool;
     memory::ensure_schema(pool_ref).await;
@@ -142,12 +144,13 @@ pub async fn agent_human_resolve(
         &intervention_id, &response, pool_ref, &app_handle,
     ).await?;
     app_log!("AGENT", "Human gate {} resolved",
-             &intervention_id[..8.min(intervention_id.len())]);
+             crate::logger::safe_truncate(&intervention_id, 8));
     Ok(())
 }
 
 // ===============================================================
-// Command 4: agent_create_blueprint -- 3-Phase Blueprint Generator
+// Command 4: agent_create_blueprint -- Template-First Blueprint Generator
+// New flow: Constraint extraction → Template match → (hit: deterministic) | (miss: 3-Phase LLM)
 // ===============================================================
 
 #[tauri::command]
@@ -156,16 +159,66 @@ pub async fn agent_create_blueprint(
     pool: tauri::State<'_, DbPool>,
     description: String,
 ) -> Result<BlueprintInfo, String> {
-    app_log!("AGENT", "Creating blueprint: {}", &description[..description.len().min(60)]);
+    crate::logger::log_separator("AGENT CREATE BLUEPRINT");
+    app_log!("AGENT", "Creating blueprint: {}", crate::logger::safe_truncate(&description, 120));
     let pool_ref: &sqlx::SqlitePool = &*pool;
     memory::ensure_schema(pool_ref).await;
 
+    // ── Step 1: Try template matching (no LLM, deterministic) ──
+    app_log!("AGENT", "  Step 1: Template matching...");
+    if let Some(template_match) = template_matcher::match_template(&description) {
+        app_log!("AGENT", "  ✅ Template matched: {} (confidence={:.2}, mode={:?})",
+                 template_match.template.template_id,
+                 template_match.confidence,
+                 template_match.template.execution_mode);
+
+        match template_match.template.execution_mode {
+            types::TemplateExecutionMode::Deterministic => {
+                // Fully deterministic — no LLM calls at all
+                let bp = template_matcher::template_to_blueprint(&template_match, &description);
+                blueprint_engine::save_blueprint(&bp, pool_ref).await;
+                app_log!("AGENT", "  Blueprint created (DETERMINISTIC): id={} name='{}' steps={}",
+                         crate::logger::safe_truncate(&bp.id, 8),
+                         crate::logger::safe_truncate(&bp.name, 40),
+                         bp.workflow_template.len());
+                return Ok(bp);
+            }
+            types::TemplateExecutionMode::SkeletonWithLlm => {
+                // Template skeleton exists, but may need LLM for content details
+                // For now, use template-generated blueprint directly
+                // Phase 2 will add LLM content enrichment
+                let bp = template_matcher::template_to_blueprint(&template_match, &description);
+                blueprint_engine::save_blueprint(&bp, pool_ref).await;
+                app_log!("AGENT", "  Blueprint created (SKELETON+LLM): id={} name='{}' steps={}",
+                         crate::logger::safe_truncate(&bp.id, 8),
+                         crate::logger::safe_truncate(&bp.name, 40),
+                         bp.workflow_template.len());
+                return Ok(bp);
+            }
+            types::TemplateExecutionMode::PlannerFallback => {
+                // Fall through to LLM planner
+                app_log!("AGENT", "  Template says use PlannerFallback, continuing to LLM...");
+            }
+        }
+    }
+
+    // ── Step 2: Fallback to 3-Phase LLM Blueprint Generation ──
+    app_log!("AGENT", "  Step 2: LLM 3-phase generation (no template matched)...");
     let llm_config = get_llm_config(pool_ref, None).await?;
+    app_log!("AGENT", "  LLM config: model='{}' endpoint='{}'", llm_config.model_name, crate::logger::safe_truncate(&llm_config.endpoint, 80));
     let router = model_router::ModelRouter::new(llm_config);
     let llm = llm_client::LlmClient::new(router.for_blueprint())?;
+    app_log!("AGENT", "  LLM client ready, starting 3-phase generation...");
 
-    blueprint_engine::generate_blueprint(&description, &llm, pool_ref).await
+    let result = blueprint_engine::generate_blueprint(&description, &llm, pool_ref).await;
+    match &result {
+        Ok(bp) => app_log!("AGENT", "  Blueprint created (LLM): id={} name='{}' steps={}",
+                          crate::logger::safe_truncate(&bp.id, 8), crate::logger::safe_truncate(&bp.name, 40), bp.workflow_template.len()),
+        Err(e) => crate::logger::error("AGENT", &format!("  Blueprint creation FAILED: {}", e)),
+    }
+    result
 }
+
 
 // ===============================================================
 // Command 5: agent_list_blueprints
@@ -175,9 +228,12 @@ pub async fn agent_create_blueprint(
 pub async fn agent_list_blueprints(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<BlueprintInfo>, String> {
+    app_log!("AGENT", "agent_list_blueprints called");
     let pool_ref: &sqlx::SqlitePool = &*pool;
     memory::ensure_schema(pool_ref).await;
-    Ok(blueprint_engine::load_all_blueprints(pool_ref).await)
+    let bps = blueprint_engine::load_all_blueprints(pool_ref).await;
+    app_log!("AGENT", "agent_list_blueprints: {} blueprints", bps.len());
+    Ok(bps)
 }
 
 // ===============================================================
@@ -204,9 +260,12 @@ pub async fn agent_delete_blueprint(
 pub async fn agent_list_experiences(
     pool: tauri::State<'_, DbPool>,
 ) -> Result<Vec<ExperienceInfo>, String> {
+    app_log!("AGENT", "agent_list_experiences called");
     let pool_ref: &sqlx::SqlitePool = &*pool;
     memory::ensure_schema(pool_ref).await;
-    Ok(memory::list_experiences(pool_ref).await)
+    let exps = memory::list_experiences(pool_ref).await;
+    app_log!("AGENT", "agent_list_experiences: {} experiences", exps.len());
+    Ok(exps)
 }
 
 // ===============================================================
@@ -224,7 +283,7 @@ pub async fn agent_test_blueprint(
     goal: Option<String>,      // optional override; default = blueprint.goal_template
 ) -> Result<serde_json::Value, String> {
     let pool_ref: &sqlx::SqlitePool = &*pool;
-    app_log!("AGENT", "=== agent_test_blueprint: {}@{} ===", &blueprint_id[..8.min(blueprint_id.len())], blueprint_version);
+    app_log!("AGENT", "=== agent_test_blueprint: {}@{} ===", crate::logger::safe_truncate(&blueprint_id, 8), blueprint_version);
 
     // Load the specific blueprint — do NOT regenerate
     let blueprints = blueprint_engine::load_all_blueprints(pool_ref).await;
@@ -236,7 +295,7 @@ pub async fn agent_test_blueprint(
         ))?;
 
     let test_goal = goal.unwrap_or_else(|| blueprint.goal_template.clone());
-    app_log!("AGENT", "Testing blueprint '{}' v{} — goal: {}", blueprint.name, blueprint.version, &test_goal[..test_goal.len().min(60)]);
+    app_log!("AGENT", "Testing blueprint '{}' v{} — goal: {}", blueprint.name, blueprint.version, crate::logger::safe_truncate(&test_goal, 60));
 
     // Execute via workflow runtime (same path as production — SSOT)
     let llm_config = get_llm_config(pool_ref, None).await?;
@@ -256,9 +315,9 @@ pub async fn agent_test_blueprint(
 
     if !report.has_violations {
         blueprint_engine::mark_blueprint_tested(&blueprint_id, pool_ref).await.ok();
-        app_log!("AGENT", "Blueprint {}@{} auto-marked as Tested (no violations)", &blueprint_id[..8], blueprint_version);
+        app_log!("AGENT", "Blueprint {}@{} auto-marked as Tested (no violations)", crate::logger::safe_truncate(&blueprint_id, 8), blueprint_version);
     } else {
-        app_log!("AGENT", "Blueprint {}@{} has {} violations — NOT marked tested", &blueprint_id[..8], blueprint_version, report.deviations.len());
+        app_log!("AGENT", "Blueprint {}@{} has {} violations — NOT marked tested", crate::logger::safe_truncate(&blueprint_id, 8), blueprint_version, report.deviations.len());
     }
 
     Ok(serde_json::json!({
@@ -407,7 +466,7 @@ pub async fn agent_review_revision_candidate(
     sqlx::query("UPDATE asset_revision_candidates SET status = ? WHERE id = ?")
         .bind(status).bind(&candidate_id)
         .execute(&*pool).await.map_err(|e| e.to_string())?;
-    app_log!("AGENT", "Revision candidate {} {}", &candidate_id[..8.min(candidate_id.len())], status);
+    app_log!("AGENT", "Revision candidate {} {}", crate::logger::safe_truncate(&candidate_id, 8), status);
     Ok(())
 }
 
@@ -502,6 +561,7 @@ async fn get_llm_config(
     };
 
     let (base_url, api_key, model_name) = row;
+    app_log!("AGENT", "  get_llm_config: model='{}' base_url='{}'", model_name, crate::logger::safe_truncate(&base_url, 60));
     let endpoint = if base_url.ends_with("/chat/completions") {
         base_url
     } else if base_url.ends_with('/') {

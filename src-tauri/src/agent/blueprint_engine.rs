@@ -18,7 +18,7 @@ pub async fn generate_blueprint(
     llm: &LlmClient,
     pool: &sqlx::SqlitePool,
 ) -> Result<BlueprintInfo, String> {
-    app_log!("BLUEPRINT", "Generating blueprint: {}", &description[..description.len().min(60)]);
+    app_log!("BLUEPRINT", "Generating blueprint: {}", crate::logger::safe_truncate(&description, 60));
 
     // Get available tools for prompt
     let tools = tool_runtime::get_builtin_tools();
@@ -27,7 +27,7 @@ pub async fn generate_blueprint(
 
     // ── Phase 1: Intent Analysis ───────────────────────────────────
     let intent = analyze_intent(description, &tool_list_str, llm).await?;
-    app_log!("BLUEPRINT", "Intent: {}", &intent[..intent.len().min(100)]);
+    app_log!("BLUEPRINT", "Intent: {}", crate::logger::safe_truncate(&intent, 100));
 
     // ── Phase 2: Workflow Generation ───────────────────────────────
     let workflow_json = generate_workflow(description, &intent, &tool_list_str, &tools, llm).await?;
@@ -118,7 +118,7 @@ async fn generate_workflow(
     let clean = extract_json_object(&raw);
 
     serde_json::from_str(&clean)
-        .map_err(|e| format!("工作流 JSON 解析失败: {e}\n原始: {}", &clean[..clean.len().min(300)]))
+        .map_err(|e| format!("工作流 JSON 解析失败: {e}\n原始: {}", crate::logger::safe_truncate(&clean, 300)))
 }
 
 // ─── Phase 3: Machine Validation ──────────────────────────────────
@@ -300,7 +300,7 @@ pub async fn mark_blueprint_tested(
     let _ = sqlx::query(
         "UPDATE agent_blueprints SET status = 'tested' WHERE id = ? AND status = 'draft'"
     ).bind(blueprint_id).execute(pool).await;
-    crate::app_log!("BLUEPRINT", "Marked tested: {}", &blueprint_id[..8.min(blueprint_id.len())]);
+    crate::app_log!("BLUEPRINT", "Marked tested: {}", crate::logger::safe_truncate(&blueprint_id, 8));
     Ok(())
 }
 
@@ -341,7 +341,7 @@ pub async fn update_blueprint_from_correction(
     .execute(pool).await;
 
     crate::app_log!("BLUEPRINT", "Revision candidate {} from correction {}",
-                   &candidate.candidate_id[..8], &correction_id[..8.min(correction_id.len())]);
+                   crate::logger::safe_truncate(&candidate.candidate_id, 8), crate::logger::safe_truncate(&correction_id, 8));
     candidate
 }
 

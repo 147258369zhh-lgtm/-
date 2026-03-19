@@ -609,6 +609,368 @@ pub fn get_builtin_tools() -> Vec<ToolDef> {
                 }),
             },
         },
+        // ═══════════════════════════════════════════════
+        // P0 Office Workflow Tools — Phase 1 Restructure
+        // ═══════════════════════════════════════════════
+
+        // ── Domain 1: Location & Path Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "desktop_path_get".into(),
+                description: "获取当前用户的桌面文件夹绝对路径。无需参数，直接返回如 C:\\Users\\xxx\\Desktop。".into(),
+                parameters: json!({"type": "object", "properties": {}, "required": []}),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "documents_path_get".into(),
+                description: "获取当前用户的「我的文档」文件夹绝对路径。无需参数。".into(),
+                parameters: json!({"type": "object", "properties": {}, "required": []}),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "path_exists".into(),
+                description: "检查指定路径（文件或目录）是否存在。返回 true/false。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "要检查的路径" }
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+
+        // ── Domain 2: Word Extraction Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "word_extract_fields".into(),
+                description: "从 Word 文档中按关键词或规则提取字段值。例如提取「姓名」「编号」「日期」「金额」等。返回 JSON 键值对。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Word 文件绝对路径" },
+                        "fields": { "type": "string", "description": "要提取的字段名，逗号分隔，如 '姓名,编号,日期,金额'" }
+                    },
+                    "required": ["path", "fields"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "word_read_tables".into(),
+                description: "读取 Word 文档中所有表格的内容。返回每个表格的行列数据。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Word 文件绝对路径" },
+                        "table_index": { "type": "integer", "description": "指定读取第几个表格（从0开始），不填则读取全部" }
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+
+        // ── Domain 3: Word Modification Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "word_replace_text".into(),
+                description: "批量替换 Word 文档中的文本。支持多组替换。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Word 文件绝对路径" },
+                        "replacements": { "type": "string", "description": "替换规则，格式：'旧文本1→新文本1|||旧文本2→新文本2'，用 ||| 分隔多组" },
+                        "output_path": { "type": "string", "description": "输出路径（可选，不填则覆盖原文件）" }
+                    },
+                    "required": ["path", "replacements"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "word_fill_template".into(),
+                description: "按字段映射填充 Word 模板。模板中用 {{字段名}} 作为占位符，传入键值对自动替换。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "template_path": { "type": "string", "description": "Word 模板文件路径（含 {{占位符}}）" },
+                        "output_path": { "type": "string", "description": "输出文件路径" },
+                        "fields": { "type": "string", "description": "字段值，格式：'姓名=张三|||编号=A001|||日期=2026-03-18'" }
+                    },
+                    "required": ["template_path", "output_path", "fields"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "word_create_empty".into(),
+                description: "创建一个空白的 Word 文档（.docx）。只需指定保存路径和文件名。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "filename": { "type": "string", "description": "文件名（含 .docx 后缀）" },
+                        "save_dir": { "type": "string", "description": "保存目录，如桌面路径" }
+                    },
+                    "required": ["filename", "save_dir"]
+                }),
+            },
+        },
+
+        // ── Domain 4: Excel Extraction Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_read_headers".into(),
+                description: "读取 Excel 文件的第一行表头列名。返回列名列表。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件路径" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选，默认第一个）" }
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_find_cell".into(),
+                description: "在 Excel 中查找包含指定值的单元格。返回单元格位置和值。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件路径" },
+                        "value": { "type": "string", "description": "要查找的值" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_extract_rows".into(),
+                description: "按条件提取 Excel 中的行。可按列值筛选。返回匹配行的数据。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件路径" },
+                        "column": { "type": "string", "description": "筛选列名" },
+                        "condition": { "type": "string", "description": "条件，如 '=张三' 或 '>100' 或 'contains:北京'" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "column", "condition"]
+                }),
+            },
+        },
+
+        // ── Domain 5: Excel Modification Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_write_cell".into(),
+                description: "写入 Excel 指定单元格的值。通过行列坐标定位。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件路径" },
+                        "cell": { "type": "string", "description": "单元格坐标，如 'A1' 或 'B3'" },
+                        "value": { "type": "string", "description": "要写入的值" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "cell", "value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_update_rows".into(),
+                description: "按条件批量更新 Excel 中的行。匹配指定列的值后，更新目标列。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Excel 文件路径" },
+                        "match_column": { "type": "string", "description": "匹配列名" },
+                        "match_value": { "type": "string", "description": "匹配值" },
+                        "update_column": { "type": "string", "description": "要更新的列名" },
+                        "new_value": { "type": "string", "description": "新值" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "match_column", "match_value", "update_column", "new_value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "excel_replace_by_key".into(),
+                description: "按主键列匹配后，批量替换目标列的值。适合 Excel ↔ Excel 数据同步。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "目标 Excel 文件路径" },
+                        "key_column": { "type": "string", "description": "主键列名（用于匹配行）" },
+                        "updates": { "type": "string", "description": "更新数据，格式：'主键值1:列名=新值|||主键值2:列名=新值'" },
+                        "sheet": { "type": "string", "description": "工作表名称（可选）" }
+                    },
+                    "required": ["path", "key_column", "updates"]
+                }),
+            },
+        },
+
+        // ── Domain 6: Intermediate Data Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "vars_set".into(),
+                description: "在当前 Agent 会话中设置一个变量，供后续步骤使用。变量在整个 Agent 运行期间有效。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "变量名" },
+                        "value": { "type": "string", "description": "变量值" }
+                    },
+                    "required": ["name", "value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "vars_get".into(),
+                description: "获取当前 Agent 会话中之前设置的变量值。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "变量名" }
+                    },
+                    "required": ["name"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "record_build".into(),
+                description: "从键值对构造一条结构化记录（JSON 对象）。用于将提取结果标准化。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "fields": { "type": "string", "description": "键值对，格式：'姓名=张三|||编号=A001|||日期=2026-03-18'" }
+                    },
+                    "required": ["fields"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "record_map_fields".into(),
+                description: "对结构化记录进行字段名映射转换。将源字段名映射为目标字段名。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "record": { "type": "string", "description": "JSON 格式的源记录" },
+                        "mapping": { "type": "string", "description": "映射规则，格式：'源字段1→目标字段1|||源字段2→目标字段2'" }
+                    },
+                    "required": ["record", "mapping"]
+                }),
+            },
+        },
+
+        // ── Domain 7: Browser Form-Filling Tools ──
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "browser_fill_input".into(),
+                description: "在网页中填写输入框。通过 CSS 选择器定位元素并填入文本。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "网页 URL（如果当前没有打开页面）" },
+                        "selector": { "type": "string", "description": "CSS 选择器，如 '#name' 或 'input[name=phone]'" },
+                        "value": { "type": "string", "description": "要填入的值" }
+                    },
+                    "required": ["selector", "value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "browser_select_option".into(),
+                description: "在网页中选择下拉框选项。通过 CSS 选择器定位 select 元素并选择指定选项。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "网页 URL（可选）" },
+                        "selector": { "type": "string", "description": "CSS 选择器，如 '#city' 或 'select[name=province]'" },
+                        "value": { "type": "string", "description": "要选择的选项值或文本" }
+                    },
+                    "required": ["selector", "value"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "browser_click".into(),
+                description: "点击网页中的按钮或元素。通过 CSS 选择器定位。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "网页 URL（可选）" },
+                        "selector": { "type": "string", "description": "CSS 选择器，如 '#submit-btn' 或 'button[type=submit]'" }
+                    },
+                    "required": ["selector"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "browser_upload_file".into(),
+                description: "在网页中上传本地文件。通过 CSS 选择器定位 file input 并上传。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "网页 URL（可选）" },
+                        "selector": { "type": "string", "description": "CSS 选择器，如 'input[type=file]'" },
+                        "file_path": { "type": "string", "description": "要上传的本地文件绝对路径" }
+                    },
+                    "required": ["selector", "file_path"]
+                }),
+            },
+        },
+        ToolDef {
+            tool_type: "function".into(),
+            function: ToolFunction {
+                name: "browser_submit_form".into(),
+                description: "提交网页表单。可指定表单选择器或提交按钮选择器。".into(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": { "type": "string", "description": "网页 URL（可选）" },
+                        "form_selector": { "type": "string", "description": "表单 CSS 选择器，默认 'form'" },
+                        "submit_selector": { "type": "string", "description": "提交按钮选择器（可选，指定后点击该按钮而不是直接 submit）" }
+                    },
+                    "required": []
+                }),
+            },
+        },
     ]
 }
 
@@ -2140,6 +2502,582 @@ with urllib.request.urlopen(req, timeout=10) as r:
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 Err(format!("压缩/解压失败: {}", stderr.trim()))
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        // P0 Office Workflow Tool Implementations
+        // ═══════════════════════════════════════════════
+
+        // ── Domain 1: Location & Path ──
+        "desktop_path_get" => {
+            let desktop = dirs::desktop_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| {
+                    let home = std::env::var("USERPROFILE")
+                        .unwrap_or_else(|_| "C:\\Users\\Default".into());
+                    format!("{}\\Desktop", home)
+                });
+            Ok(desktop)
+        }
+
+        "documents_path_get" => {
+            let docs = dirs::document_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| {
+                    let home = std::env::var("USERPROFILE")
+                        .unwrap_or_else(|_| "C:\\Users\\Default".into());
+                    format!("{}\\Documents", home)
+                });
+            Ok(docs)
+        }
+
+        "path_exists" => {
+            let path = arguments["path"].as_str().ok_or("path_exists: missing path")?;
+            let exists = std::path::Path::new(path).exists();
+            Ok(format!("{}", exists))
+        }
+
+        // ── Domain 2: Word Extraction ──
+        "word_extract_fields" => {
+            let path = arguments["path"].as_str().ok_or("word_extract_fields: missing path")?;
+            let fields = arguments["fields"].as_str().ok_or("word_extract_fields: missing fields")?;
+            let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).collect();
+            let fields_py: String = field_list.iter()
+                .map(|f| format!("\"{}\"", f))
+                .collect::<Vec<_>>().join(", ");
+
+            let script = format!(
+                r#"import docx, json, re, sys
+try:
+    doc = docx.Document(r'{path}')
+    text = '\n'.join([p.text for p in doc.paragraphs])
+    fields = [{fields_py}]
+    result = {{}}
+    for field in fields:
+        patterns = [
+            rf'{{field}}[\s:：]+(.*?)(?:\n|$)',
+            rf'{{field}}[：:]\s*(.*?)(?:\n|$)',
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text)
+            if m:
+                result[field] = m.group(1).strip()
+                break
+        if field not in result:
+            result[field] = None
+    print(json.dumps(result, ensure_ascii=False))
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), fields_py = fields_py);
+            run_python_script(&script).await
+        }
+
+        "word_read_tables" => {
+            let path = arguments["path"].as_str().ok_or("word_read_tables: missing path")?;
+            let table_idx = arguments.get("table_index").and_then(|v| v.as_i64());
+            let idx_filter = table_idx.map(|i| format!("if idx == {}:", i))
+                .unwrap_or_else(|| "if True:".to_string());
+
+            let script = format!(
+                r#"import docx, json, sys
+try:
+    doc = docx.Document(r'{path}')
+    tables = []
+    for idx, table in enumerate(doc.tables):
+        {idx_filter}
+            rows = []
+            for row in table.rows:
+                rows.append([cell.text.strip() for cell in row.cells])
+            tables.append({{"table_index": idx, "rows": rows}})
+    print(json.dumps(tables, ensure_ascii=False))
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), idx_filter = idx_filter);
+            run_python_script(&script).await
+        }
+
+        // ── Domain 3: Word Modification ──
+        "word_replace_text" => {
+            let path = arguments["path"].as_str().ok_or("word_replace_text: missing path")?;
+            let replacements = arguments["replacements"].as_str().ok_or("word_replace_text: missing replacements")?;
+            let output = arguments.get("output_path").and_then(|v| v.as_str()).unwrap_or(path);
+
+            // Parse replacements: "oldA→newA|||oldB→newB"
+            let pairs: Vec<(&str, &str)> = replacements.split("|||")
+                .filter_map(|pair| {
+                    let parts: Vec<&str> = pair.splitn(2, '→').collect();
+                    if parts.len() == 2 { Some((parts[0].trim(), parts[1].trim())) } else { None }
+                }).collect();
+
+            let replace_code: String = pairs.iter()
+                .map(|(old, new)| format!(
+                    "    for p in doc.paragraphs:\n        if '{}' in p.text:\n            for run in p.runs:\n                run.text = run.text.replace('{}', '{}')\n",
+                    old, old, new
+                )).collect();
+
+            let script = format!(
+                r#"import docx, sys
+try:
+    doc = docx.Document(r'{path}')
+{replace_code}
+    doc.save(r'{output}')
+    print('替换完成，已保存到: {output}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), output = output.replace('\'', "\\'"),
+    replace_code = replace_code);
+            run_python_script(&script).await
+        }
+
+        "word_fill_template" => {
+            let template_path = arguments["template_path"].as_str().ok_or("word_fill_template: missing template_path")?;
+            let output_path = arguments["output_path"].as_str().ok_or("word_fill_template: missing output_path")?;
+            let fields_str = arguments["fields"].as_str().ok_or("word_fill_template: missing fields")?;
+
+            // Parse: "key1=val1|||key2=val2"
+            let pairs: Vec<(&str, &str)> = fields_str.split("|||")
+                .filter_map(|pair| {
+                    let parts: Vec<&str> = pair.splitn(2, '=').collect();
+                    if parts.len() == 2 { Some((parts[0].trim(), parts[1].trim())) } else { None }
+                }).collect();
+
+            let replace_lines: String = pairs.iter()
+                .map(|(k, v)| format!(
+                    "    for p in doc.paragraphs:\n        if '{{{{{}}}}}' in p.text:\n            for run in p.runs:\n                run.text = run.text.replace('{{{{{}}}}}', '{}')\n",
+                    k, k, v.replace('\'', "\\'")
+                )).collect();
+
+            let script = format!(
+                r#"import docx, sys
+try:
+    doc = docx.Document(r'{template}')
+{replace_lines}
+    doc.save(r'{output}')
+    print('模板填充完成: {output}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, template = template_path.replace('\'', "\\'"),
+    output = output_path.replace('\'', "\\'"),
+    replace_lines = replace_lines);
+            run_python_script(&script).await
+        }
+
+        "word_create_empty" => {
+            let filename = arguments["filename"].as_str().ok_or("word_create_empty: missing filename")?;
+            let save_dir = arguments["save_dir"].as_str().ok_or("word_create_empty: missing save_dir")?;
+            let full_path = format!("{}\\{}", save_dir.trim_end_matches('\\'), filename);
+
+            let script = format!(
+                r#"import docx, sys, os
+try:
+    os.makedirs(r'{dir}', exist_ok=True)
+    doc = docx.Document()
+    doc.save(r'{path}')
+    print('空白 Word 已创建: {path}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, dir = save_dir.replace('\'', "\\'"), path = full_path.replace('\'', "\\'"));
+            run_python_script(&script).await
+        }
+
+        // ── Domain 4: Excel Extraction ──
+        "excel_read_headers" => {
+            let path = arguments["path"].as_str().ok_or("excel_read_headers: missing path")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            let script = format!(
+                r#"import openpyxl, json, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}', read_only=True, data_only=True)
+    {sheet_code}
+    headers = [str(cell.value) if cell.value is not None else '' for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    print(json.dumps(headers, ensure_ascii=False))
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code);
+            run_python_script(&script).await
+        }
+
+        "excel_find_cell" => {
+            let path = arguments["path"].as_str().ok_or("excel_find_cell: missing path")?;
+            let value = arguments["value"].as_str().ok_or("excel_find_cell: missing value")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            let script = format!(
+                r#"import openpyxl, json, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}', read_only=True, data_only=True)
+    {sheet_code}
+    results = []
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is not None and '{value}' in str(cell.value):
+                results.append({{"cell": cell.coordinate, "value": str(cell.value), "row": cell.row, "col": cell.column}})
+                if len(results) >= 20:
+                    break
+        if len(results) >= 20:
+            break
+    print(json.dumps(results, ensure_ascii=False))
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code,
+    value = value.replace('\'', "\\'"));
+            run_python_script(&script).await
+        }
+
+        "excel_extract_rows" => {
+            let path = arguments["path"].as_str().ok_or("excel_extract_rows: missing path")?;
+            let column = arguments["column"].as_str().ok_or("excel_extract_rows: missing column")?;
+            let condition = arguments["condition"].as_str().ok_or("excel_extract_rows: missing condition")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            let script = format!(
+                r#"import openpyxl, json, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}', read_only=True, data_only=True)
+    {sheet_code}
+    headers = [str(c.value) if c.value else '' for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    col_name = '{column}'
+    cond = '{condition}'
+    col_idx = headers.index(col_name) if col_name in headers else -1
+    if col_idx == -1:
+        print(json.dumps({{"error": f"列 '{{col_name}}' 不存在，可用列: {{headers}}"}}, ensure_ascii=False))
+        sys.exit(0)
+    results = []
+    for row in ws.iter_rows(min_row=2, values_only=False):
+        val = str(row[col_idx].value) if row[col_idx].value is not None else ''
+        match = False
+        if cond.startswith('='):
+            match = val == cond[1:]
+        elif cond.startswith('>'):
+            try: match = float(val) > float(cond[1:])
+            except: pass
+        elif cond.startswith('<'):
+            try: match = float(val) < float(cond[1:])
+            except: pass
+        elif cond.startswith('contains:'):
+            match = cond[9:] in val
+        else:
+            match = cond in val
+        if match:
+            row_data = {{headers[i]: str(c.value) if c.value is not None else '' for i, c in enumerate(row) if i < len(headers)}}
+            row_data['_row_number'] = row[0].row
+            results.append(row_data)
+            if len(results) >= 100:
+                break
+    print(json.dumps(results, ensure_ascii=False))
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code,
+    column = column.replace('\'', "\\'"), condition = condition.replace('\'', "\\'"));
+            run_python_script(&script).await
+        }
+
+        // ── Domain 5: Excel Modification ──
+        "excel_write_cell" => {
+            let path = arguments["path"].as_str().ok_or("excel_write_cell: missing path")?;
+            let cell = arguments["cell"].as_str().ok_or("excel_write_cell: missing cell")?;
+            let value = arguments["value"].as_str().ok_or("excel_write_cell: missing value")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            let script = format!(
+                r#"import openpyxl, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}')
+    {sheet_code}
+    ws['{cell}'] = '{value}'
+    wb.save(r'{path}')
+    print('已写入 {cell} = {value}')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code,
+    cell = cell, value = value.replace('\'', "\\'"));
+            run_python_script(&script).await
+        }
+
+        "excel_update_rows" => {
+            let path = arguments["path"].as_str().ok_or("excel_update_rows: missing path")?;
+            let match_col = arguments["match_column"].as_str().ok_or("excel_update_rows: missing match_column")?;
+            let match_val = arguments["match_value"].as_str().ok_or("excel_update_rows: missing match_value")?;
+            let update_col = arguments["update_column"].as_str().ok_or("excel_update_rows: missing update_column")?;
+            let new_val = arguments["new_value"].as_str().ok_or("excel_update_rows: missing new_value")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            let script = format!(
+                r#"import openpyxl, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}')
+    {sheet_code}
+    headers = [str(c.value) if c.value else '' for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    m_idx = headers.index('{match_col}') if '{match_col}' in headers else -1
+    u_idx = headers.index('{update_col}') if '{update_col}' in headers else -1
+    if m_idx == -1 or u_idx == -1:
+        print(f'列名不存在，可用列: {{headers}}')
+        sys.exit(1)
+    count = 0
+    for row in ws.iter_rows(min_row=2):
+        if row[m_idx].value is not None and str(row[m_idx].value) == '{match_val}':
+            row[u_idx].value = '{new_val}'
+            count += 1
+    wb.save(r'{path}')
+    print(f'已更新 {{count}} 行')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code,
+    match_col = match_col.replace('\'', "\\'"), match_val = match_val.replace('\'', "\\'"),
+    update_col = update_col.replace('\'', "\\'"), new_val = new_val.replace('\'', "\\'"));
+            run_python_script(&script).await
+        }
+
+        "excel_replace_by_key" => {
+            let path = arguments["path"].as_str().ok_or("excel_replace_by_key: missing path")?;
+            let key_col = arguments["key_column"].as_str().ok_or("excel_replace_by_key: missing key_column")?;
+            let updates_str = arguments["updates"].as_str().ok_or("excel_replace_by_key: missing updates")?;
+            let sheet = arguments.get("sheet").and_then(|v| v.as_str()).unwrap_or("");
+            let sheet_code = if sheet.is_empty() {
+                "ws = wb.active".to_string()
+            } else {
+                format!("ws = wb['{}']", sheet)
+            };
+
+            // Parse: "keyVal1:colName=newVal|||keyVal2:colName=newVal"
+            let updates_py: String = updates_str.split("|||")
+                .filter_map(|u| {
+                    let parts: Vec<&str> = u.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        let kv: Vec<&str> = parts[1].splitn(2, '=').collect();
+                        if kv.len() == 2 {
+                            Some(format!("(\"{}\", \"{}\", \"{}\")", parts[0].trim(), kv[0].trim(), kv[1].trim()))
+                        } else { None }
+                    } else { None }
+                }).collect::<Vec<_>>().join(", ");
+
+            let script = format!(
+                r#"import openpyxl, sys
+try:
+    wb = openpyxl.load_workbook(r'{path}')
+    {sheet_code}
+    headers = [str(c.value) if c.value else '' for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    key_idx = headers.index('{key_col}') if '{key_col}' in headers else -1
+    if key_idx == -1:
+        print(f'主键列 {key_col} 不存在')
+        sys.exit(1)
+    updates = [{updates_py}]
+    count = 0
+    for key_val, col_name, new_val in updates:
+        col_idx = headers.index(col_name) if col_name in headers else -1
+        if col_idx == -1:
+            continue
+        for row in ws.iter_rows(min_row=2):
+            if row[key_idx].value is not None and str(row[key_idx].value) == key_val:
+                row[col_idx].value = new_val
+                count += 1
+    wb.save(r'{path}')
+    print(f'按主键更新 {{count}} 处')
+except Exception as e:
+    print(f'ERROR: {{e}}', file=sys.stderr)
+    sys.exit(1)
+"#, path = path.replace('\'', "\\'"), sheet_code = sheet_code,
+    key_col = key_col.replace('\'', "\\'"), updates_py = updates_py);
+            run_python_script(&script).await
+        }
+
+        // ── Domain 6: Intermediate Data ──
+        "vars_set" => {
+            let name = arguments["name"].as_str().ok_or("vars_set: missing name")?;
+            let value = arguments["value"].as_str().ok_or("vars_set: missing value")?;
+            {
+                use std::sync::Mutex;
+                use std::collections::HashMap;
+                lazy_static::lazy_static! {
+                    static ref AGENT_VARS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+                }
+                let mut vars = AGENT_VARS.lock().unwrap();
+                vars.insert(name.to_string(), value.to_string());
+            }
+            Ok(format!("变量 '{}' 已设置", name))
+        }
+
+        "vars_get" => {
+            let name = arguments["name"].as_str().ok_or("vars_get: missing name")?;
+            {
+                use std::sync::Mutex;
+                use std::collections::HashMap;
+                lazy_static::lazy_static! {
+                    static ref AGENT_VARS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+                }
+                let vars = AGENT_VARS.lock().unwrap();
+                match vars.get(name) {
+                    Some(val) => Ok(val.clone()),
+                    None => Ok(format!("变量 '{}' 不存在", name)),
+                }
+            }
+        }
+
+        "record_build" => {
+            let fields_str = arguments["fields"].as_str().ok_or("record_build: missing fields")?;
+            let mut map = serde_json::Map::new();
+            for pair in fields_str.split("|||") {
+                let parts: Vec<&str> = pair.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    map.insert(parts[0].trim().to_string(), Value::String(parts[1].trim().to_string()));
+                }
+            }
+            Ok(serde_json::to_string_pretty(&Value::Object(map)).unwrap_or_default())
+        }
+
+        "record_map_fields" => {
+            let record_str = arguments["record"].as_str().ok_or("record_map_fields: missing record")?;
+            let mapping_str = arguments["mapping"].as_str().ok_or("record_map_fields: missing mapping")?;
+
+            let record: Value = serde_json::from_str(record_str)
+                .map_err(|e| format!("record JSON 无效: {}", e))?;
+
+            let mut new_map = serde_json::Map::new();
+            let mappings: Vec<(&str, &str)> = mapping_str.split("|||")
+                .filter_map(|m| {
+                    let parts: Vec<&str> = m.splitn(2, '→').collect();
+                    if parts.len() == 2 { Some((parts[0].trim(), parts[1].trim())) } else { None }
+                }).collect();
+
+            if let Value::Object(obj) = &record {
+                for (old_key, new_key) in &mappings {
+                    if let Some(val) = obj.get(*old_key) {
+                        new_map.insert(new_key.to_string(), val.clone());
+                    }
+                }
+                // Keep unmapped fields
+                for (k, v) in obj {
+                    if !mappings.iter().any(|(old, _)| old == k) {
+                        new_map.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            Ok(serde_json::to_string_pretty(&Value::Object(new_map)).unwrap_or_default())
+        }
+
+        // ── Domain 7: Browser Form-Filling ──
+        "browser_fill_input" | "browser_select_option" | "browser_click" |
+        "browser_upload_file" | "browser_submit_form" => {
+            // All browser form tools delegate to browser_script with generated Playwright code
+            let url = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = arguments.get("selector").and_then(|v| v.as_str()).unwrap_or("");
+            let value = arguments.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            let file_path = arguments.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+            let form_selector = arguments.get("form_selector").and_then(|v| v.as_str()).unwrap_or("form");
+            let submit_selector = arguments.get("submit_selector").and_then(|v| v.as_str()).unwrap_or("");
+
+            let nav = if url.is_empty() { String::new() } else {
+                format!("await page.goto('{}');\nawait page.waitForLoadState('domcontentloaded');\n", url)
+            };
+
+            let action = match tool_name {
+                "browser_fill_input" => format!(
+                    "await page.fill('{}', '{}');\nconsole.log('已填写: {} = {}');",
+                    selector, value, selector, value
+                ),
+                "browser_select_option" => format!(
+                    "await page.selectOption('{}', '{}');\nconsole.log('已选择: {} = {}');",
+                    selector, value, selector, value
+                ),
+                "browser_click" => format!(
+                    "await page.click('{}');\nconsole.log('已点击: {}');",
+                    selector, selector
+                ),
+                "browser_upload_file" => format!(
+                    "await page.setInputFiles('{}', '{}');\nconsole.log('已上传: {}');",
+                    selector, file_path.replace('\\', "\\\\"), file_path
+                ),
+                "browser_submit_form" => {
+                    if submit_selector.is_empty() {
+                        format!(
+                            "await page.$eval('{}', form => form.submit());\nconsole.log('表单已提交');",
+                            form_selector
+                        )
+                    } else {
+                        format!(
+                            "await page.click('{}');\nconsole.log('已点击提交按钮');",
+                            submit_selector
+                        )
+                    }
+                }
+                _ => unreachable!(),
+            };
+
+            let user_script = format!("{}{}", nav, action);
+
+            // Inline Playwright execution (avoid async recursion)
+            let full_script = format!(
+                r#"
+const {{ chromium }} = require('playwright');
+(async () => {{
+    const browser = await chromium.launch({{ headless: false }});
+    const context = await browser.newContext({{
+        viewport: {{ width: 1920, height: 1080 }}
+    }});
+    const page = await context.newPage();
+    try {{
+        {user_script}
+        console.log('SUCCESS: Script completed');
+    }} catch (e) {{
+        console.error('ERROR: ' + e.message);
+        process.exit(1);
+    }} finally {{
+        await browser.close();
+    }}
+}})();
+"#, user_script = user_script);
+
+            let output = tokio::process::Command::new("node")
+                .args(&["-e", &full_script])
+                .env("PLAYWRIGHT_BROWSERS_PATH", "0")
+                .output()
+                .await
+                .map_err(|e| format!("执行浏览器操作失败: {}", e))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Ok(stdout.trim().to_string())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                Err(format!("浏览器操作失败:\nstdout: {}\nstderr: {}", stdout.trim(), stderr.trim()))
             }
         }
 

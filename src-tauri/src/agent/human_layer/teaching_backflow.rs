@@ -55,7 +55,7 @@ pub async fn extract_pattern_from_teaching(
 
     let pattern = ReusablePattern {
         pattern_id: uuid::Uuid::new_v4().to_string(),
-        name: format!("Pattern from: {}", &session.objective[..session.objective.len().min(40)]),
+        name: format!("Pattern from: {}", crate::logger::safe_truncate(&session.objective, 40)),
         description: session.objective.clone(),
         objective: session.objective.clone(),
         preconditions: vec![],

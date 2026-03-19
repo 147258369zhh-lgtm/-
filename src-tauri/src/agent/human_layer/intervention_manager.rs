@@ -46,7 +46,7 @@ pub async fn resolve_gate(
     let _ = app.emit("human-lifecycle", serde_json::json!({
         "type": "human_input_received",
         "intervention_id": intervention_id,
-        "response_preview": &response[..response.len().min(100)],
+        "response_preview": crate::logger::safe_truncate(&response, 100),
     }));
 
     // Signal the parked async waiter in recovery_bridge
@@ -55,7 +55,7 @@ pub async fn resolve_gate(
         "response": response,
     }));
 
-    app_log!("INTERVENTION_MGR", "Resolved {}", &intervention_id[..8.min(intervention_id.len())]);
+    app_log!("INTERVENTION_MGR", "Resolved {}", crate::logger::safe_truncate(&intervention_id, 8));
     Ok(())
 }
 

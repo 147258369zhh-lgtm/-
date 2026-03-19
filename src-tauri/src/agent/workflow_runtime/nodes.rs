@@ -28,7 +28,7 @@ impl NodeSpec {
                 return base.replace("{prev}", prev);
             }
             // Append context if no explicit placeholder
-            format!("{}\n\n上一步结果参考:\n{}", base, &prev[..prev.len().min(500)])
+            format!("{}\n\n上一步结果参考:\n{}", base, crate::logger::safe_truncate(&prev, 500))
         } else {
             base.clone()
         }

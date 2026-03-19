@@ -38,7 +38,7 @@ pub async fn record_trace(trace: &ActionTrace, pool: &SqlitePool) {
     .bind(&trace.timestamp)
     .execute(pool).await;
 
-    app_log!("TRACE", "[{:?}] {} — {}", trace.action_kind, trace.actor, &trace.description[..trace.description.len().min(60)]);
+    app_log!("TRACE", "[{:?}] {} — {}", trace.action_kind, trace.actor, crate::logger::safe_truncate(&trace.description, 60));
 }
 
 pub async fn record_agent_thought(
@@ -74,7 +74,7 @@ pub async fn record_tool_result(
         session_id, run_id, None,
         ActionKind::ToolResult,
         tool_name, &format!("result from {}", tool_name),
-        serde_json::json!({"content": &result[..result.len().min(500)]}),
+        serde_json::json!({"content": crate::logger::safe_truncate(&result, 500)}),
         Some(success),
     )
 }

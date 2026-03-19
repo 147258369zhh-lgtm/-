@@ -1,0 +1,245 @@
+/* ═══════════════════════════════════════════════
+   Popup 样式 — 录制控制面板
+   ═══════════════════════════════════════════════ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 320px;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  background: #0f0f14;
+  color: #e0e0e8;
+  font-size: 13px;
+  overflow-x: hidden;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #a8b4ff;
+}
+
+.logo svg { color: #6c7bff; }
+
+.status-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255,255,255,0.06);
+  color: #888;
+}
+
+.status-badge.recording {
+  background: rgba(255,60,60,0.15);
+  color: #ff6b6b;
+  animation: pulse 1.5s infinite;
+}
+
+.status-badge.paused {
+  background: rgba(255,180,60,0.15);
+  color: #ffb43a;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Controls ── */
+.controls {
+  display: flex;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-record {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+.btn-record:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5f4f, #e74c3c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(231,76,60,0.3);
+}
+
+.btn-pause {
+  background: rgba(255,180,60,0.15);
+  color: #ffb43a;
+}
+.btn-pause:hover:not(:disabled) {
+  background: rgba(255,180,60,0.25);
+}
+
+.btn-stop {
+  background: rgba(255,255,255,0.08);
+  color: #ccc;
+}
+.btn-stop:hover:not(:disabled) {
+  background: rgba(255,255,255,0.15);
+}
+
+.record-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* ── Step Counter ── */
+.step-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(108,123,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.counter-label { color: #888; font-size: 12px; }
+.counter-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #6c7bff;
+}
+
+/* ── Section ── */
+.section {
+  padding: 10px 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
+
+.btn-small {
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.06);
+  border: none;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-small:hover {
+  background: rgba(255,255,255,0.12);
+  color: #ddd;
+}
+
+/* ── Flow List ── */
+.flow-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.flow-list::-webkit-scrollbar { width: 4px; }
+.flow-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #555;
+  font-size: 12px;
+}
+
+.flow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: all 0.15s;
+}
+.flow-item:hover {
+  background: rgba(108,123,255,0.06);
+  border-color: rgba(108,123,255,0.15);
+}
+
+.flow-info { flex: 1; min-width: 0; }
+.flow-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flow-meta {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.flow-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon-small {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-icon-small:hover {
+  background: rgba(255,255,255,0.08);
+  color: #ddd;
+}
+
+/* ── Footer ── */
+.footer {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  text-align: center;
+}

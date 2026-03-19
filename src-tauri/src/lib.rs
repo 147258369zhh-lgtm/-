@@ -48,6 +48,7 @@ pub fn run() {
                 logger::set_log_dir(dir);
             }
             logger::init();
+            logger::install_panic_hook();
             app_log!("APP", "═══ Application Starting ═══");
             app_log!("APP", "Version: {}", env!("CARGO_PKG_VERSION"));
             app_log!("APP", "Debug mode: {}", cfg!(debug_assertions));

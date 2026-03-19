@@ -119,7 +119,7 @@ pub async fn run_workflow(
                     &intervention.intervention_id,
                 ).await {
                     Ok(response) => {
-                        app_log!("WORKFLOW", "  ✅ Human gate resolved: {}", &response[..response.len().min(50)]);
+                        app_log!("WORKFLOW", "  ✅ Human gate resolved: {}", crate::logger::safe_truncate(&response, 50));
                         machine.mark_node_done(response);
                         emit_progress(app, &machine.wf_run.workflow_run_id, idx + 1, RunStatus::Done);
                     }

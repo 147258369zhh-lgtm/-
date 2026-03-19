@@ -97,7 +97,7 @@ pub async fn run(
                 let mut results: Vec<ToolResult> = Vec::new();
                 for tc in &tool_calls {
                     let args = tc.parsed_args();
-                    app_log!("REACT", "  CALL {} (id={})", tc.function.name, &tc.id[..8.min(tc.id.len())]);
+                    app_log!("REACT", "  CALL {} (id={})", tc.function.name, crate::logger::safe_truncate(&tc.id, 8));
 
                     // Emit tool_call event
                     emit_event(app, "tool_call", session.round,
@@ -219,7 +219,7 @@ fn emit_event(
         content: content.map(|s| s.to_string()),
         duration_ms,
     };
-    let msg = content.map(|s| s[..s.len().min(300)].to_string());
+    let msg = content.map(|s| crate::logger::safe_truncate(&s, 300).to_string());
     let _ = app.emit("agent-event", AgentEvent {
         event_type: event_type.to_string(),
         step: Some(step),
