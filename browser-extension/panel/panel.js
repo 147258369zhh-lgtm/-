@@ -5,28 +5,28 @@ let recordingState = 'idle', recordTimer = null, recordStartTime = 0;
 let dragSrcIndex = -1;
 
 const TI = {
-  click:'👆',dblclick:'👆',rightClick:'👆',hover:'🖱️',input:'⌨️',pasteText:'📋',
-  clearInput:'🧹',select:'📋',check:'☑️',focus:'🎯',upload:'📎',
-  keypress:'⌨️',hotkey:'⌨️',typeText:'⌨️',
-  scroll:'📜',scrollIntoView:'🎯',scrollBy:'📜',
-  navigate:'🔗',newTab:'📑',refresh:'🔄',goBack:'⬅️',goForward:'➡️',screenshot:'📷',
-  delay:'⏱️',waitForElement:'⏳',waitDisappear:'⏳',waitPageLoad:'⏳',
-  extract:'📥',extractTable:'📊',extractAttribute:'📥',getText:'📥',getValue:'📥',
-  condition:'🔀',loop:'🔁',loopEnd:'🔚',group:'📁',comment:'💬',jsAlert:'⚠️',
+  click: '👆', dblclick: '👆', rightClick: '👆', hover: '🖱️', input: '⌨️', pasteText: '📋',
+  clearInput: '🧹', select: '📋', check: '☑️', focus: '🎯', upload: '📎',
+  keypress: '⌨️', hotkey: '⌨️', typeText: '⌨️',
+  scroll: '📜', scrollIntoView: '🎯', scrollBy: '📜',
+  navigate: '🔗', newTab: '📑', refresh: '🔄', goBack: '⬅️', goForward: '➡️', screenshot: '📷',
+  delay: '⏱️', waitForElement: '⏳', waitDisappear: '⏳', waitPageLoad: '⏳',
+  extract: '📥', extractTable: '📊', extractAttribute: '📥', getText: '📥', getValue: '📥',
+  condition: '🔀', loop: '🔁', loopEnd: '🔚', group: '📁', comment: '💬', jsAlert: '⚠️',
 };
 const AN = {
-  click:'点击',dblclick:'双击',rightClick:'右键',hover:'悬停',input:'输入文本',
-  pasteText:'粘贴文本',clearInput:'清空',select:'下拉选择',check:'勾选',focus:'聚焦',upload:'上传',
-  keypress:'按键',hotkey:'组合键',typeText:'逐字输入',
-  scroll:'滚动到位置',scrollIntoView:'滚动到元素',scrollBy:'滚动距离',
-  navigate:'打开网址',newTab:'新标签页',refresh:'刷新',goBack:'返回',goForward:'前进',screenshot:'截图',
-  delay:'延时等待',waitForElement:'等待元素',waitDisappear:'等待消失',waitPageLoad:'等待加载',
-  extract:'提取文本',extractTable:'提取表格',extractAttribute:'提取属性',getText:'取文本',getValue:'取值',
-  condition:'条件判断',loop:'🔁 循环开始',loopEnd:'🔚 循环结束',group:'分组',comment:'注释',jsAlert:'弹窗',
+  click: '点击', dblclick: '双击', rightClick: '右键', hover: '悬停', input: '输入文本',
+  pasteText: '粘贴文本', clearInput: '清空', select: '下拉选择', check: '勾选', focus: '聚焦', upload: '上传',
+  keypress: '按键', hotkey: '组合键', typeText: '逐字输入',
+  scroll: '滚动到位置', scrollIntoView: '滚动到元素', scrollBy: '滚动距离',
+  navigate: '打开网址', newTab: '新标签页', refresh: '刷新', goBack: '返回', goForward: '前进', screenshot: '截图',
+  delay: '延时等待', waitForElement: '等待元素', waitDisappear: '等待消失', waitPageLoad: '等待加载',
+  extract: '提取文本', extractTable: '提取表格', extractAttribute: '提取属性', getText: '取文本', getValue: '取值',
+  condition: '条件判断', loop: '🔁 循环开始', loopEnd: '🔚 循环结束', group: '分组', comment: '注释', jsAlert: '弹窗',
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadFlowList(); syncState();
+  loadFlowList(); syncState(); setupStepListDelegation();
 
   // ★ 所有事件用 ?. 安全绑定 ★
   const bind = (id, evt, fn) => $(id)?.addEventListener(evt, fn);
@@ -296,32 +296,74 @@ function renderSteps() {
     </div>`;
   }
   list.innerHTML = html;
-  // 事件绑定
-  list.querySelectorAll('.step-item').forEach(item => {
-    item.addEventListener('click', e => {
-      if (e.target.closest('[data-action="toggle"]')) {
-        const i = +item.dataset.i;
-        currentFlow.steps[i].enabled = !currentFlow.steps[i].enabled;
-        saveFlow(); renderSteps(); return;
-      }
-      selectedStepIndex = +item.dataset.i;
-      renderSteps();
-      showDetail(selectedStepIndex);
-    });
-    item.addEventListener('dragstart', e => { dragSrcIndex = +item.dataset.i; item.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-    item.addEventListener('dragend', () => { item.classList.remove('dragging'); list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); });
-    item.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; item.classList.add('drag-over'); });
-    item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
-    item.addEventListener('drop', e => {
-      e.preventDefault(); item.classList.remove('drag-over');
-      const targetIdx = +item.dataset.i;
-      if (dragSrcIndex < 0 || dragSrcIndex === targetIdx) return;
-      const [moved] = currentFlow.steps.splice(dragSrcIndex, 1);
-      currentFlow.steps.splice(targetIdx, 0, moved);
-      currentFlow.steps.forEach((s, i) => s.id = `step_${String(i + 1).padStart(3, '0')}`);
-      dragSrcIndex = -1;
-      saveFlow(); renderSteps();
-    });
+  // ★ 事件通过委托处理（见 setupStepListDelegation），无需逐个绑定 ★
+}
+
+// ═══ 步骤列表事件委托 — 只绑定一次，适用于任意数量步骤 ═══
+let _stepDelegationSetup = false;
+function setupStepListDelegation() {
+  if (_stepDelegationSetup) return;
+  _stepDelegationSetup = true;
+  const list = $('#stepList');
+  if (!list) return;
+
+  // click: 选中步骤 / 开关 enabled
+  list.addEventListener('click', e => {
+    const item = e.target.closest('.step-item');
+    if (!item) return;
+    if (e.target.closest('[data-action="toggle"]')) {
+      const i = +item.dataset.i;
+      currentFlow.steps[i].enabled = !currentFlow.steps[i].enabled;
+      saveFlow(); renderSteps(); return;
+    }
+    selectedStepIndex = +item.dataset.i;
+    renderSteps();
+    showDetail(selectedStepIndex);
+  });
+
+  // dragstart
+  list.addEventListener('dragstart', e => {
+    const item = e.target.closest('.step-item');
+    if (!item) return;
+    dragSrcIndex = +item.dataset.i;
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  // dragend
+  list.addEventListener('dragend', e => {
+    const item = e.target.closest('.step-item');
+    if (item) item.classList.remove('dragging');
+    list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  });
+
+  // dragover
+  list.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const item = e.target.closest('.step-item');
+    if (item) item.classList.add('drag-over');
+  });
+
+  // dragleave
+  list.addEventListener('dragleave', e => {
+    const item = e.target.closest('.step-item');
+    if (item) item.classList.remove('drag-over');
+  });
+
+  // drop
+  list.addEventListener('drop', e => {
+    e.preventDefault();
+    const item = e.target.closest('.step-item');
+    if (!item) return;
+    item.classList.remove('drag-over');
+    const targetIdx = +item.dataset.i;
+    if (dragSrcIndex < 0 || dragSrcIndex === targetIdx) return;
+    const [moved] = currentFlow.steps.splice(dragSrcIndex, 1);
+    currentFlow.steps.splice(targetIdx, 0, moved);
+    currentFlow.steps.forEach((s, i) => s.id = `step_${String(i + 1).padStart(3, '0')}`);
+    dragSrcIndex = -1;
+    saveFlow(); renderSteps();
   });
 }
 

@@ -2,16 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>网页自动化录制助手</title>
+  <title>浏览器自动化插件</title>
   <link rel="stylesheet" href="panel.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
   <!-- 标题栏 -->
   <div class="panel-header">
-    <h1>网页自动化录制助手</h1>
+    <h1>⚡ 浏览器自动化</h1>
     <div class="header-actions">
-      <button class="btn-sm" id="btnExportFlow" title="导出 JSON">📤</button>
-      <button class="btn-sm" id="btnImportFlow" title="导入 JSON">📥</button>
+      <button class="btn-sm" id="btnExportFlow" title="导出 JSON">📤 导出</button>
+      <button class="btn-sm" id="btnImportFlow" title="导入 JSON">📥 导入</button>
     </div>
   </div>
 
@@ -31,9 +32,9 @@
   <!-- 流程选择 -->
   <div class="section-divider"><span>已保存流程</span></div>
   <div class="flow-selector">
-    <select id="flowSelect"><option value="">-- 选择流程 --</option></select>
-    <button class="btn-sm btn-run" id="btnNewFlow" title="新建空流程">+ 新建</button>
-    <button class="btn-sm" id="btnRefresh">🔄</button>
+    <select id="flowSelect"><option value="">— 选择流程 —</option></select>
+    <button class="btn-sm btn-run" id="btnNewFlow">+ 新建</button>
+    <button class="btn-sm" id="btnRefresh" title="刷新列表">🔄</button>
     <button class="btn-sm btn-danger" id="btnDeleteFlow" title="删除流程">🗑</button>
   </div>
 
@@ -49,7 +50,10 @@
 
   <!-- 步骤列表 -->
   <div class="step-list" id="stepList">
-    <div class="empty-hint">点击上方按钮开始录制</div>
+    <div class="empty-hint">
+      🎬 点击「开始录制」或新建流程<br>
+      <span style="font-size:10px;color:var(--text-faint);margin-top:4px;display:inline-block;">录制你的操作步骤，然后编辑和回放</span>
+    </div>
   </div>
 
   <!-- 步骤详情编辑 -->

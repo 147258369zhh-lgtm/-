@@ -34,3 +34,14 @@ src-tauri/*.db-wal
 
 # Gemini
 .gemini
+
+# Temp/debug files (root level)
+*.backup
+*.debug
+fix_*.py
+fix_*.cjs
+rebuild*.py
+update_*.py
+git_diff*.txt
+compile_errors.txt
+fix_p*.txt

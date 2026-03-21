@@ -36,6 +36,44 @@ fn get_log_path() -> String {
     path.display().to_string()
 }
 
+/// Tauri command: open a folder in the system file explorer
+#[tauri::command]
+fn open_folder(path: String) -> Result<String, String> {
+    let folder = PathBuf::from(&path);
+    // 如果是相对路径，基于 exe 目录解析
+    let abs_path = if folder.is_absolute() {
+        folder
+    } else {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join(&folder)))
+            .unwrap_or(folder)
+    };
+    
+    if !abs_path.exists() {
+        // 尝试从 cwd 解析
+        let cwd_path = std::env::current_dir()
+            .map(|d| d.join(&path))
+            .unwrap_or_else(|_| PathBuf::from(&path));
+        if cwd_path.exists() {
+            #[cfg(target_os = "windows")]
+            std::process::Command::new("explorer")
+                .arg(cwd_path.to_string_lossy().to_string())
+                .spawn()
+                .map_err(|e| e.to_string())?;
+            return Ok(cwd_path.to_string_lossy().to_string());
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .arg(abs_path.to_string_lossy().to_string())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    
+    Ok(abs_path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -175,6 +213,7 @@ pub fn run() {
             agent::agent_review_tool_candidate,
             frontend_log,
             get_log_path,
+            open_folder,
             // ── Workflow Engine (P0) ──
             workflow::workflow_create,
             workflow::workflow_list,

@@ -90,7 +90,11 @@
       const ariaLabel = el.getAttribute('aria-label');
       if (ariaLabel) selectors.push(`[aria-label="${ariaLabel}"]`);
 
-      // 6. title
+      // 6. placeholder（输入框特有）
+      const placeholder = el.getAttribute('placeholder');
+      if (placeholder) selectors.push(`${el.tagName.toLowerCase()}[placeholder="${placeholder}"]`);
+
+      // 7. title
       const title = el.getAttribute('title');
       if (title) selectors.push(`[title="${title}"]`);
 

@@ -6,6 +6,7 @@ import { ProjectWorkspace } from "./components/ProjectWorkspace";
 import { TemplateManager } from "./components/TemplateManager";
 import { CommonInfoManager } from "./components/CommonInfoManager";
 import { SettingsManager } from "./components/SettingsManager";
+import { PluginManager } from "./components/PluginManager";
 import { useStore } from "./store/useStore";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, Filter, Plus, LayoutGrid, MapPin, Tag } from "lucide-react";
@@ -397,6 +398,8 @@ function App() {
             <CommonInfoManager />
           ) : activeTab === "travel" ? (
             <TravelManager />
+          ) : activeTab === "plugins" ? (
+            <PluginManager />
           ) : activeTab === "settings" ? (
             <SettingsManager />
           ) : (

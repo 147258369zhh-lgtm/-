@@ -184,27 +184,7 @@ export const SettingsManager: React.FC = () => {
         }
     };
 
-    const S = {
-        section: {
-            backgroundColor: 'var(--bg-raised)',
-            border: '1.5px solid var(--border)',
-            borderRadius: 24,
-            padding: 28,
-            transition: 'var(--transition)',
-        } as React.CSSProperties,
-        label: {
-            fontSize: 10, fontWeight: 900, letterSpacing: '0.15em',
-            textTransform: 'uppercase' as const, color: 'var(--text-faint)',
-            display: 'block', marginBottom: 8,
-        },
-        input: {
-            width: '100%', padding: '13px 16px',
-            borderRadius: 12, border: '1.5px solid var(--border)',
-            backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)',
-            fontSize: 13, outline: 'none', transition: 'var(--transition)',
-            boxSizing: 'border-box' as const,
-        },
-    };
+    // Styles migrated to CSS: .settings-section, .form-label, .form-input (index.css)
 
     if (isLoading) return (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-surface)', flexDirection: 'column', gap: 16 }}>
@@ -271,7 +251,7 @@ export const SettingsManager: React.FC = () => {
                 {activeTab === 'system' && (
                     <>
                         {/* Appearance */}
-                        <div style={S.section}>
+                        <div className="settings-section">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                     <div style={{ padding: 12, borderRadius: 16, backgroundColor: 'var(--brand-subtle)', color: 'var(--brand)' }}>
@@ -308,7 +288,7 @@ export const SettingsManager: React.FC = () => {
                         </div>
 
                         {/* Storage */}
-                        <div style={S.section}>
+                        <div className="settings-section">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
                                 <div style={{ padding: 12, borderRadius: 16, backgroundColor: 'var(--success-subtle)', color: 'var(--success)' }}>
                                     <HardDrive size={22} />
@@ -321,9 +301,9 @@ export const SettingsManager: React.FC = () => {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                                 <div>
-                                    <label style={S.label}>默认项目根目录</label>
+                                    <label className="form-label">默认项目根目录</label>
                                     <div style={{ display: 'flex', gap: 10 }}>
-                                        <input readOnly value={defaultRootPath} placeholder="尚未设置默认路径" style={{ ...S.input, flex: 1 }} />
+                                        <input readOnly value={defaultRootPath} placeholder="尚未设置默认路径" className="form-input flex-1" />
                                         <button onClick={handleSelectDefaultPath} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 18px', borderRadius: 12, border: '1.5px solid var(--border)', backgroundColor: 'var(--bg-muted)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
                                             <FolderOpen size={15} />浏览
                                         </button>
@@ -332,8 +312,8 @@ export const SettingsManager: React.FC = () => {
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div>
-                                        <label style={S.label}>回收站保留天数</label>
-                                        <input type="number" value={trashRetention} onChange={(e) => handleUpdateSetting('trash_retention_days', e.target.value)} style={S.input} />
+                                        <label className="form-label">回收站保留天数</label>
+                                        <input type="number" value={trashRetention} onChange={(e) => handleUpdateSetting('trash_retention_days', e.target.value)} className="form-input" />
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                                         <button onClick={runCleanup} style={{ width: '100%', padding: 13, borderRadius: 12, border: '2px dashed var(--warning)', background: 'var(--warning-subtle)', color: 'var(--warning)', fontSize: 12, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -345,7 +325,7 @@ export const SettingsManager: React.FC = () => {
                         </div>
 
                         {/* AI Engine Routing */}
-                        <div style={S.section}>
+                        <div className="settings-section">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
                                 <div style={{ padding: 12, borderRadius: 16, backgroundColor: 'var(--brand-subtle)', color: 'var(--brand)' }}>
                                     <Zap size={22} />
@@ -408,7 +388,7 @@ export const SettingsManager: React.FC = () => {
                         </div>
 
                         {/* Data */}
-                        <div style={S.section}>
+                        <div className="settings-section">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                     <div style={{ padding: 12, borderRadius: 16, backgroundColor: 'var(--purple-subtle)', color: 'var(--purple)' }}>
@@ -587,7 +567,7 @@ export const SettingsManager: React.FC = () => {
                                     </div>
 
                                     {/* ══ Section 1: LOCAL MODELS ══ */}
-                                    <div style={S.section}>
+                                    <div className="settings-section">
                                         <SectionHeader
                                             icon={<MonitorPlay size={22} />}
                                             title="Ⅰ. 本地模型"
@@ -680,7 +660,7 @@ export const SettingsManager: React.FC = () => {
                                         });
 
                                         return (
-                                            <div style={S.section}>
+                                            <div className="settings-section">
                                                 {/* Section header */}
                                                 <SectionHeader
                                                     icon={<Cloud size={22} />}
@@ -947,7 +927,7 @@ export const SettingsManager: React.FC = () => {
                                     <div style={{ height: 16 }} />
 
                                     {/* ══ Section 3: EMBEDDING ENGINE ══ */}
-                                    <div style={S.section}>
+                                    <div className="settings-section">
                                         <SectionHeader
                                             icon={<Cpu size={22} />}
                                             title="Ⅲ. 嵌入引擎"
@@ -955,7 +935,7 @@ export const SettingsManager: React.FC = () => {
                                         />
                                         {/* Engine Type Selector */}
                                         <div style={{ marginBottom: 16 }}>
-                                            <label style={S.label}>嵌入引擎类型</label>
+                                            <label className="form-label">嵌入引擎类型</label>
                                             <div style={{ display: 'flex', gap: 8 }}>
                                                 {[
                                                     { key: 'local', label: '本地内置 (推荐)', desc: '自动下载 ~23MB 模型' },
@@ -1036,17 +1016,17 @@ export const SettingsManager: React.FC = () => {
                                         {embeddingEngine !== 'local' && (
                                             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
                                                 <div>
-                                                    <label style={S.label}>嵌入 API 地址</label>
-                                                    <input defaultValue={embeddingEngine === 'lmstudio' ? 'http://127.0.0.1:1234/v1' : ''} onBlur={e => invoke('update_setting', { key: 'embedding_base_url', value: e.target.value })} style={S.input} placeholder="http://127.0.0.1:1234/v1" />
+                                                    <label className="form-label">嵌入 API 地址</label>
+                                                    <input defaultValue={embeddingEngine === 'lmstudio' ? 'http://127.0.0.1:1234/v1' : ''} onBlur={e => invoke('update_setting', { key: 'embedding_base_url', value: e.target.value })} className="form-input" placeholder="http://127.0.0.1:1234/v1" />
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                                     <div>
-                                                        <label style={S.label}>嵌入模型名</label>
-                                                        <input defaultValue="nomic-embed-text" onBlur={e => invoke('update_setting', { key: 'embedding_model_name', value: e.target.value })} style={S.input} placeholder="nomic-embed-text" />
+                                                        <label className="form-label">嵌入模型名</label>
+                                                        <input defaultValue="nomic-embed-text" onBlur={e => invoke('update_setting', { key: 'embedding_model_name', value: e.target.value })} className="form-input" placeholder="nomic-embed-text" />
                                                     </div>
                                                     <div>
-                                                        <label style={S.label}>API Key (可选)</label>
-                                                        <input type="password" onBlur={e => invoke('update_setting', { key: 'embedding_api_key', value: e.target.value })} style={S.input} placeholder="本地模型可留白" />
+                                                        <label className="form-label">API Key (可选)</label>
+                                                        <input type="password" onBlur={e => invoke('update_setting', { key: 'embedding_api_key', value: e.target.value })} className="form-input" placeholder="本地模型可留白" />
                                                     </div>
                                                 </div>
                                             </div>
@@ -1118,30 +1098,30 @@ export const SettingsManager: React.FC = () => {
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                                     <div style={{ gridColumn: '1 / -1' }}>
-                                                        <label style={S.label}>显示名称</label>
-                                                        <input value={aiForm.name || ''} onChange={e => setAiForm({ ...aiForm, name: e.target.value })} style={S.input} placeholder="例如：本地 Ollama 或 DeepSeek" />
+                                                        <label className="form-label">显示名称</label>
+                                                        <input value={aiForm.name || ''} onChange={e => setAiForm({ ...aiForm, name: e.target.value })} className="form-input" placeholder="例如：本地 Ollama 或 DeepSeek" />
                                                     </div>
                                                     <div>
-                                                        <label style={S.label}>提供商类型</label>
-                                                        <select value={aiForm.provider || 'openai'} onChange={e => setAiForm({ ...aiForm, provider: e.target.value })} style={S.input}>
+                                                        <label className="form-label">提供商类型</label>
+                                                        <select value={aiForm.provider || 'openai'} onChange={e => setAiForm({ ...aiForm, provider: e.target.value })} className="form-input">
                                                             <option value="ollama">Ollama (本地)</option>
                                                             <option value="openai">OpenAI 兼容 (SF/DeepSeek/LM Studio)</option>
                                                             <option value="gemini">Google Gemini</option>
                                                         </select>
                                                     </div>
                                                     <div>
-                                                        <label style={S.label}>安全秘钥 (API KEY)</label>
-                                                        <input value={aiForm.api_key || ''} onChange={e => setAiForm({ ...aiForm, api_key: e.target.value })} style={S.input} placeholder="本地模型可留白" type="password" />
+                                                        <label className="form-label">安全秘钥 (API KEY)</label>
+                                                        <input value={aiForm.api_key || ''} onChange={e => setAiForm({ ...aiForm, api_key: e.target.value })} className="form-input" placeholder="本地模型可留白" type="password" />
                                                     </div>
                                                     <div style={{ gridColumn: '1 / -1' }}>
-                                                        <label style={S.label}>API Base URL</label>
-                                                        <input value={aiForm.base_url || ''} onChange={e => setAiForm({ ...aiForm, base_url: e.target.value })} style={S.input} placeholder="http://127.0.0.1:11434/v1" />
+                                                        <label className="form-label">API Base URL</label>
+                                                        <input value={aiForm.base_url || ''} onChange={e => setAiForm({ ...aiForm, base_url: e.target.value })} className="form-input" placeholder="http://127.0.0.1:11434/v1" />
                                                     </div>
                                                     {/* 模型选择区 - 占满整行 */}
                                                     <div style={{ gridColumn: '1 / -1' }}>
-                                                        <label style={S.label}>模型名 {fetchedModels.length > 0 && <span style={{ color: 'var(--brand)', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>· {fetchedModels.length} 个可用</span>}</label>
+                                                        <label className="form-label">模型名 {fetchedModels.length > 0 && <span style={{ color: 'var(--brand)', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>· {fetchedModels.length} 个可用</span>}</label>
                                                         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                                                            <input value={aiForm.model_name || ''} onChange={e => setAiForm({ ...aiForm, model_name: e.target.value })} style={{ ...S.input, flex: 1 }} placeholder="如 deepseek-ai/DeepSeek-V3 或点击右侧获取列表" />
+                                                            <input value={aiForm.model_name || ''} onChange={e => setAiForm({ ...aiForm, model_name: e.target.value })} className="form-input flex-1" placeholder="如 deepseek-ai/DeepSeek-V3 或点击右侧获取列表" />
                                                             <button onClick={async () => {
                                                                 if (!aiForm.base_url) { alert('请先填写 API 地址'); return; }
                                                                 setIsFetchingModels(true);
@@ -1235,31 +1215,31 @@ export const SettingsManager: React.FC = () => {
                                     <div style={{ height: 16 }} />
 
                                     {/* ══ AI Prompts Section ══ */}
-                                    <div style={S.section}>
+                                    <div className="settings-section">
                                         <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>AI 提示词模板</h3>
                                         <p style={{ margin: '0 0 20px', fontSize: 12, color: 'var(--text-muted)' }}>
                                             可为不同环节单独配置系统提示词。留空时将回退到内置默认提示。
                                         </p>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                                             <div>
-                                                <label style={S.label}>项目综述 · 系统提示词</label>
-                                                <textarea value={promptProjectSummary} onChange={e => setPromptProjectSummary(e.target.value)} onBlur={() => handleUpdateSetting('prompt_project_summary_system', promptProjectSummary)} placeholder={defaultPrompts.projectSummary} style={{ ...S.input, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
+                                                <label className="form-label">项目综述 · 系统提示词</label>
+                                                <textarea value={promptProjectSummary} onChange={e => setPromptProjectSummary(e.target.value)} onBlur={() => handleUpdateSetting('prompt_project_summary_system', promptProjectSummary)} placeholder={defaultPrompts.projectSummary} className="form-input" style={{ minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
                                             </div>
                                             <div>
-                                                <label style={S.label}>勘察情况综述 · 系统提示词</label>
-                                                <textarea value={promptSurveySummary} onChange={e => setPromptSurveySummary(e.target.value)} onBlur={() => handleUpdateSetting('prompt_survey_summary_system', promptSurveySummary)} placeholder={defaultPrompts.surveySummary} style={{ ...S.input, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
+                                                <label className="form-label">勘察情况综述 · 系统提示词</label>
+                                                <textarea value={promptSurveySummary} onChange={e => setPromptSurveySummary(e.target.value)} onBlur={() => handleUpdateSetting('prompt_survey_summary_system', promptSurveySummary)} placeholder={defaultPrompts.surveySummary} className="form-input" style={{ minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
                                             </div>
                                             <div>
-                                                <label style={S.label}>AI 对话侧栏 · 系统提示词</label>
-                                                <textarea value={promptAiChat} onChange={e => setPromptAiChat(e.target.value)} onBlur={() => handleUpdateSetting('prompt_ai_chat_system', promptAiChat)} placeholder={defaultPrompts.aiChat} style={{ ...S.input, minHeight: 120, resize: 'vertical', fontFamily: 'inherit' }} />
+                                                <label className="form-label">AI 对话侧栏 · 系统提示词</label>
+                                                <textarea value={promptAiChat} onChange={e => setPromptAiChat(e.target.value)} onBlur={() => handleUpdateSetting('prompt_ai_chat_system', promptAiChat)} placeholder={defaultPrompts.aiChat} className="form-input" style={{ minHeight: 120, resize: 'vertical', fontFamily: 'inherit' }} />
                                             </div>
                                             <div>
-                                                <label style={S.label}>联动方案优化 · 系统提示词</label>
-                                                <textarea value={promptSchemeOptimize} onChange={e => setPromptSchemeOptimize(e.target.value)} onBlur={() => handleUpdateSetting('prompt_scheme_optimize_system', promptSchemeOptimize)} placeholder={defaultPrompts.schemeOptimize} style={{ ...S.input, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
+                                                <label className="form-label">联动方案优化 · 系统提示词</label>
+                                                <textarea value={promptSchemeOptimize} onChange={e => setPromptSchemeOptimize(e.target.value)} onBlur={() => handleUpdateSetting('prompt_scheme_optimize_system', promptSchemeOptimize)} placeholder={defaultPrompts.schemeOptimize} className="form-input" style={{ minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
                                             </div>
                                             <div>
-                                                <label style={S.label}>联动规则生成 · 系统提示词</label>
-                                                <textarea value={promptSchemeGenerate} onChange={e => setPromptSchemeGenerate(e.target.value)} onBlur={() => handleUpdateSetting('prompt_scheme_generate_system', promptSchemeGenerate)} placeholder={defaultPrompts.schemeGenerate} style={{ ...S.input, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
+                                                <label className="form-label">联动规则生成 · 系统提示词</label>
+                                                <textarea value={promptSchemeGenerate} onChange={e => setPromptSchemeGenerate(e.target.value)} onBlur={() => handleUpdateSetting('prompt_scheme_generate_system', promptSchemeGenerate)} placeholder={defaultPrompts.schemeGenerate} className="form-input" style={{ minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }} />
                                             </div>
                                         </div>
                                     </div>

@@ -283,6 +283,162 @@ html, body {
 /* ─────────────────────────────────────────
    Custom scrollbar
 ───────────────────────────────────────── */
+
+/* ─── Layout Utilities (reduces inline styles) ─── */
+.flex-row       { display: flex; flex-direction: row; }
+.flex-col       { display: flex; flex-direction: column; }
+.flex-center    { display: flex; align-items: center; }
+.flex-between   { display: flex; align-items: center; justify-content: space-between; }
+.flex-wrap      { flex-wrap: wrap; }
+.flex-1         { flex: 1; min-width: 0; }
+.flex-shrink-0  { flex-shrink: 0; }
+.items-start    { align-items: flex-start; }
+
+.gap-4  { gap: 4px; }
+.gap-6  { gap: 6px; }
+.gap-8  { gap: 8px; }
+.gap-10 { gap: 10px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; }
+.gap-24 { gap: 24px; }
+
+/* ─── Typography Utilities ─── */
+.text-xs    { font-size: 10px; }
+.text-sm    { font-size: 11px; }
+.text-base  { font-size: 12px; }
+.text-md    { font-size: 13px; }
+.text-lg    { font-size: 14px; }
+.text-xl    { font-size: 18px; }
+.text-2xl   { font-size: 24px; }
+.text-3xl   { font-size: 28px; }
+
+.font-semibold { font-weight: 600; }
+.font-bold     { font-weight: 700; }
+.font-black    { font-weight: 800; }
+.font-heavy    { font-weight: 900; }
+
+.uppercase     { text-transform: uppercase; }
+.tracking-wide { letter-spacing: 0.1em; }
+.truncate      { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.whitespace-nowrap { white-space: nowrap; }
+.cursor-pointer    { cursor: pointer; }
+
+/* ─── Spacing ─── */
+.p-8  { padding: 8px; }
+.p-12 { padding: 12px; }
+.p-16 { padding: 16px; }
+.p-20 { padding: 20px; }
+.p-24 { padding: 24px; }
+.mb-4  { margin-bottom: 4px; }
+.mb-8  { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.mb-24 { margin-bottom: 24px; }
+
+/* ─── Border Radius ─── */
+.rounded-8  { border-radius: 8px; }
+.rounded-10 { border-radius: 10px; }
+.rounded-12 { border-radius: 12px; }
+.rounded-16 { border-radius: 16px; }
+.rounded-24 { border-radius: 24px; }
+.rounded-full { border-radius: 9999px; }
+
+/* ─── Common Component Patterns ─── */
+.settings-section {
+  background-color: var(--bg-raised);
+  border: 1.5px solid var(--border);
+  border-radius: 24px;
+  padding: 28px;
+  transition: var(--transition);
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.settings-section-icon {
+  padding: 12px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: var(--transition);
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-outline {
+  border: 1px solid var(--border);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-raised);
+  border-color: var(--border-strong);
+}
+
+.btn-primary {
+  border: none;
+  background-color: var(--brand);
+  color: var(--text-inverse);
+}
+
+.btn-primary:hover {
+  background-color: var(--brand-hover);
+}
+
+.status-badge {
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {

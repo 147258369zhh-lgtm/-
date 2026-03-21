@@ -11,7 +11,8 @@
 //   memory.rs         -> Short + long-term memory
 //   human_layer/      -> Teaching / Correction / Trace / Recovery
 //   workflow_runtime/ -> Multi-node workflow orchestration
-//   tool_runtime.rs   -> Tool implementations (unchanged)
+//   tool_defs.rs      -> Built-in tool JSON schemas
+//   tool_runtime.rs   -> Tool execution engine
 
 pub mod types;
 mod llm_client;
@@ -23,6 +24,7 @@ mod blueprint_engine;
 pub mod memory;
 pub mod human_layer;
 pub mod workflow_runtime;
+pub mod tool_defs;
 pub mod tool_runtime;
 pub mod tool_platform;
 pub mod ssot_validator;

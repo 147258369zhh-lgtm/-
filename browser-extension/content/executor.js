@@ -176,28 +176,47 @@
       }
     },
 
-    // ═══ 查找元素 ═══
+    // ═══ 查找元素（智能等待 + MutationObserver + 指数退避）═══
     async findElement(target, timeout = 10000) {
       const deadline = Date.now() + timeout;
+      let interval = 100; // 起始 100ms，指数退避到 500ms
+
+      // 先用 MutationObserver 等待 DOM 变化
+      const waitForMutation = () => new Promise(resolve => {
+        const observer = new MutationObserver(() => { observer.disconnect(); resolve(); });
+        observer.observe(document.body || document.documentElement, { childList: true, subtree: true, attributes: true });
+        setTimeout(() => { observer.disconnect(); resolve(); }, interval);
+      });
+
       while (Date.now() < deadline) {
         for (const selector of target.selectors) {
           try {
-            let el = null;
-            if (selector.startsWith('//') || selector.startsWith('//*')) {
-              const r = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-              el = r.singleNodeValue;
-            } else if (selector.includes(':has-text(')) {
-              const m = selector.match(/^(.+?):has-text\("(.+?)"\)$/);
-              if (m) { for (const c of document.querySelectorAll(m[1])) { if (c.textContent.includes(m[2])) { el = c; break; } } }
-            } else {
-              el = document.querySelector(selector);
-            }
+            const el = this._queryBySelector(selector);
             if (el && this.isVisible(el)) return el;
-          } catch (e) { /* skip */ }
+          } catch (e) { /* skip invalid selector */ }
         }
-        await this.sleep(200);
+        await waitForMutation();
+        interval = Math.min(interval * 1.5, 500); // 指数退避
       }
       return null;
+    },
+
+    /** 统一选择器查询（CSS / XPath / :has-text） */
+    _queryBySelector(selector) {
+      if (selector.startsWith('//') || selector.startsWith('//*')) {
+        const r = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        return r.singleNodeValue;
+      }
+      if (selector.includes(':has-text(')) {
+        const m = selector.match(/^(.+?):has-text\("(.+?)"\)$/);
+        if (m) {
+          for (const c of document.querySelectorAll(m[1])) {
+            if (c.textContent?.includes(m[2])) return c;
+          }
+        }
+        return null;
+      }
+      return document.querySelector(selector);
     },
 
     isVisible(el) {
@@ -208,22 +227,62 @@
       return r.width > 0 && r.height > 0;
     },
 
+    /** 检查元素是否被遮挡（modal/弹层/cookie banner 等）*/
+    _isOccluded(el) {
+      try {
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const topEl = document.elementFromPoint(cx, cy);
+        if (!topEl) return false;
+        return topEl !== el && !el.contains(topEl) && !topEl.closest('[id^="__autoflow"]');
+      } catch { return false; }
+    },
+
+    /** 尝试关闭遮挡元素（常见弹窗/cookie banner）*/
+    async _tryDismissOverlay(el) {
+      const rect = el.getBoundingClientRect();
+      const topEl = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (!topEl || topEl === el || el.contains(topEl)) return;
+      // 查找遮挡层中的关闭按钮
+      const overlay = topEl.closest('[class*="modal"], [class*="overlay"], [class*="dialog"], [class*="popup"], [class*="banner"]') || topEl;
+      const closeBtn = overlay.querySelector('[class*="close"], [aria-label*="close"], [aria-label*="关闭"], button[class*="dismiss"]');
+      if (closeBtn) {
+        console.log('[AutoFlow] 🚫 检测到遮挡层，尝试关闭');
+        closeBtn.click();
+        await this.sleep(500);
+      }
+    },
+
     // ═══ 执行动作 ═══
     async performAction(step, el) {
       const p = step.params || {};
       switch (step.type) {
         case 'click': {
           this.scrollToElement(el); await this.sleep(100);
+
+          // ★ 遮挡检测：点击前检查元素是否被弹层覆盖 ★
+          if (this._isOccluded(el)) {
+            console.warn('[AutoFlow] ⚠️ 元素被遮挡，尝试关闭覆盖层...');
+            await this._tryDismissOverlay(el);
+            await this.sleep(300);
+            // 二次检查
+            if (this._isOccluded(el)) {
+              console.warn('[AutoFlow] ⚠️ 元素仍被遮挡，尝试滚动后直接点击');
+              el.scrollIntoView({ behavior: 'auto', block: 'center' });
+              await this.sleep(200);
+            }
+          }
+
           const rect = el.getBoundingClientRect();
           const cx = rect.left + rect.width / 2;
           const cy = rect.top + rect.height / 2;
-          console.log(`[AutoFlow] 📍 点击目标: (${Math.round(cx)}, ${Math.round(cy)}) 元素:`, el.tagName, el.id || el.className?.toString?.()?.slice(0, 40));
+          console.log(`[AutoFlow] 📍 点击: (${Math.round(cx)}, ${Math.round(cy)})`, el.tagName, el.id || el.className?.toString?.()?.slice(0, 40));
 
-          // ★ 策略1: focus 先聚焦 ★
           try { el.focus(); } catch(e) {}
           await this.sleep(50);
 
-          // ★ 策略2: 完整鼠标 + Pointer 事件序列（带坐标）★
+          // 完整鼠标 + Pointer 事件序列
           const mouseOpts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 };
           el.dispatchEvent(new PointerEvent('pointerover', { ...mouseOpts, pointerId: 1 }));
           el.dispatchEvent(new MouseEvent('mouseover', mouseOpts));
@@ -234,12 +293,10 @@
           el.dispatchEvent(new PointerEvent('pointerup', { ...mouseOpts, pointerId: 1 }));
           el.dispatchEvent(new MouseEvent('mouseup', mouseOpts));
           el.dispatchEvent(new MouseEvent('click', mouseOpts));
-          console.log(`[AutoFlow]   ✅ 策略1: 完整事件序列已发送`);
 
-          // ★ 策略3: 原生 el.click() — 产生 isTrusted=true ★
+          // 原生 el.click() 兜底
           await this.sleep(50);
           el.click();
-          console.log(`[AutoFlow]   ✅ 策略2: el.click() 已触发 (isTrusted=true)`);
           break;
         }
         case 'dblclick': {
@@ -267,8 +324,8 @@
           el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); break;
         case 'input':
           this.scrollToElement(el); el.focus();
-          if (p.clearFirst !== false) el.value = '';
-          el.value = p.value || '';
+          if (p.clearFirst !== false) this._setNativeValue(el, '');
+          this._setNativeValue(el, p.value || '');
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true })); break;
         case 'pasteText': {
@@ -283,14 +340,16 @@
           break;
         }
         case 'clearInput':
-          el.focus(); el.value = '';
+          el.focus(); this._setNativeValue(el, '');
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true })); break;
         case 'typeText': {
           this.scrollToElement(el); el.focus();
-          if (p.clearFirst !== false) el.value = '';
+          if (p.clearFirst !== false) this._setNativeValue(el, '');
+          let accumulated = '';
           for (const ch of (p.value || '').split('')) {
-            el.value += ch;
+            accumulated += ch;
+            this._setNativeValue(el, accumulated);
             el.dispatchEvent(new Event('input', { bubbles: true }));
             await this.sleep(50 + Math.random() * 50);
           }
@@ -411,6 +470,25 @@
       if (!el) return;
       const r = el.getBoundingClientRect();
       if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    },
+
+    /**
+     * ★ React/Vue 受控组件兼容：通过原生属性描述符设置 value ★
+     * 直接 el.value = 'x' 对 React 受控输入无效，因为 React 内部
+     * 通过 Object.defineProperty 拦截了 value setter。
+     * 必须先调用原型链上的原生 setter，再手动触发 input 事件。
+     */
+    _setNativeValue(el, value) {
+      // 尝试获取原生 setter
+      const proto = el.tagName === 'TEXTAREA'
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (nativeSetter) {
+        nativeSetter.call(el, value);
+      } else {
+        el.value = value;
+      }
     },
 
     sleep(ms) { return new Promise(r => setTimeout(r, ms)); },

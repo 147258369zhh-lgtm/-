@@ -77,9 +77,16 @@
       if (!R || !R.active) return;
       if (R._isPluginUI(e.target)) return;
       const el = e.target;
-      if (!['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
-      R.lastInputEl = el;
-      R.lastInputValue = el.value;
+      // 支持 INPUT/TEXTAREA + contentEditable 富文本编辑器
+      if (['INPUT', 'TEXTAREA'].includes(el.tagName)) {
+        R.lastInputEl = el;
+        R.lastInputValue = el.value;
+      } else if (el.isContentEditable) {
+        R.lastInputEl = el;
+        R.lastInputValue = el.textContent || el.innerText || '';
+      } else {
+        return;
+      }
       clearTimeout(R.inputTimer);
       R.inputTimer = setTimeout(() => R.flushInput(), 500);
     },
@@ -149,4 +156,24 @@
 
   window.__AutoFlow = window.__AutoFlow || {};
   window.__AutoFlow.Recorder = Recorder;
+
+  // ★ URL 导航录制：监听 History API + beforeunload ★
+  const origPushState = history.pushState;
+  const origReplaceState = history.replaceState;
+  history.pushState = function (...args) {
+    origPushState.apply(this, args);
+    if (Recorder.active) {
+      const target = { selectors: [], text: '', tagName: '' };
+      const step = window.__AutoFlow.createStep('navigate', `导航到 ${location.href.slice(0, 50)}`, target, { url: location.href });
+      Recorder.addStep(step);
+    }
+  };
+  history.replaceState = function (...args) {
+    origReplaceState.apply(this, args);
+    if (Recorder.active) {
+      const target = { selectors: [], text: '', tagName: '' };
+      const step = window.__AutoFlow.createStep('navigate', `重定向到 ${location.href.slice(0, 50)}`, target, { url: location.href });
+      Recorder.addStep(step);
+    }
+  };
 })();
